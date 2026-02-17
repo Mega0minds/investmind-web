@@ -31,3 +31,26 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* See What's Building: no scrollbar, auto-scrolling row, circus-style cards */
+.card-row-wrap {
+  overflow: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.card-row-wrap::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.card-track {
+  animation: card-track-scroll 45s linear infinite;
+  will-change: transform;
+}
+@keyframes card-track-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.card-row-wrap:hover .card-track {
+  animation-play-state: paused;
+}

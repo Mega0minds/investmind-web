@@ -9,10 +9,10 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="px-3 pt-3 sm:px-4 sm:pt-4" style={{ background: "transparent", position: "relative" }}>
+    <header className="px-2 pt-2 sm:px-4 sm:pt-4 w-full max-w-[100vw] box-border" style={{ background: "transparent", position: "relative" }}>
       {/* Floating bar */}
       <div
-        className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-xl sm:rounded-[1.25rem] px-4 py-3 sm:px-6 md:px-8 sm:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
+        className="mx-auto flex max-w-6xl w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-[1.25rem] px-3 py-2.5 sm:px-6 md:px-8 sm:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
         style={{ backgroundColor: "#ffffff" }}
       >
         {/* Logo */}

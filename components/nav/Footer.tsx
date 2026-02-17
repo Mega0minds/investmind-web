@@ -3,11 +3,11 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer
-      className="py-10 sm:py-12 md:py-14 px-6 sm:px-8 md:px-12"
+      className="py-8 sm:py-10 md:py-14 px-4 sm:px-6 md:px-12 w-full max-w-[100vw] box-border"
       style={{ backgroundColor: "#2D1B4E", color: "#E5E7EB" }}
     >
-      <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+      <div className="mx-auto max-w-6xl w-full min-w-0">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 sm:gap-8">
           {/* Logo */}
           <Link
             href="/"
@@ -21,7 +21,7 @@ export function Footer() {
           </Link>
 
           {/* Links */}
-          <nav className="flex flex-wrap items-center gap-6">
+          <nav className="flex flex-wrap items-center gap-4 sm:gap-6">
             <Link
               href="/#about"
               className="text-sm transition hover:opacity-80"
