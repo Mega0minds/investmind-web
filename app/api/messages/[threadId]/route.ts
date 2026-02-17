@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
-  return NextResponse.json({ message: `Get thread ${params.threadId}` });
+  const { threadId } = await params;
+  return NextResponse.json({ message: `Get thread ${threadId}` });
 }

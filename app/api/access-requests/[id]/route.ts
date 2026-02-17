@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 // approve/deny
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return NextResponse.json({ message: `Approve/deny access request ${params.id}` });
+  const { id } = await params;
+  return NextResponse.json({ message: `Approve/deny access request ${id}` });
 }

@@ -167,9 +167,9 @@ export default function Landing() {
             </button>
           </div>
 
-          {/* Horizontal card row - scrollable */}
-          <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0 scrollbar-thin">
-            <div className="flex gap-4 sm:gap-5 min-w-max md:min-w-0 md:grid md:grid-cols-2 lg:grid-cols-3">
+          {/* Horizontal card row - always one row, scroll on small screens */}
+          <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0">
+            <div className="flex gap-4 sm:gap-5 min-w-max justify-start">
               {[
                 {
                   badge: "New",
@@ -210,7 +210,7 @@ export default function Landing() {
                 <a
                   key={card.title}
                   href="/explore"
-                  className="group shrink-0 w-[280px] sm:w-[300px] md:w-full rounded-2xl overflow-hidden transition transform hover:scale-[1.02] hover:shadow-xl"
+                  className="group shrink-0 w-[280px] sm:w-[300px] rounded-2xl overflow-hidden transition transform hover:scale-[1.02] hover:shadow-xl"
                   style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
                 >
                   <div

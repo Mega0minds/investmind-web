@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return NextResponse.json({ message: `Get update ${params.id}` });
+  const { id } = await params;
+  return NextResponse.json({ message: `Get update ${id}` });
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  return NextResponse.json({ message: `Update update ${params.id}` });
+  const { id } = await params;
+  return NextResponse.json({ message: `Update update ${id}` });
 }
