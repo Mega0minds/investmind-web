@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// if using Clerk webhooks
+/** Reserved for future webhooks (e.g. external auth). Auth is currently Supabase-only. */
 export async function POST(request: NextRequest) {
-  return NextResponse.json({ message: "Clerk webhook" });
+  return NextResponse.json({ message: "Webhook endpoint" }, { status: 200 });
 }

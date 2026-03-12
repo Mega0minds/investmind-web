@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
     // loop when another lockfile exists up the tree, e.g. in your user directory).
     root: path.resolve(process.cwd()),
   },
+  async redirects() {
+    return [
+      { source: "/founder/dashboard", destination: "/dashboard", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

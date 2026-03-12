@@ -1,7 +1,9 @@
+import { DashboardShell } from "../_components/DashboardShell";
+
 export default function FounderListings() {
   return (
-    <div>
-      <h1>My Listings</h1>
-    </div>
+    <DashboardShell title="My Projects">
+      <p className="text-gray-600">Manage your project ideas and listings.</p>
+    </DashboardShell>
   );
 }

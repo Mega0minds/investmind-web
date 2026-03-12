@@ -1,12 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV_TEXT = "#4A4A4A";
 
 export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    // getSession() is faster (reads from storage); sufficient for nav display
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session?.user);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
+    return () => subscription?.unsubscribe?.();
+  }, []);
 
   return (
     <header className="px-2 pt-2 sm:px-4 sm:pt-4 w-full max-w-[100vw] box-border" style={{ background: "transparent", position: "relative" }}>
@@ -45,14 +59,24 @@ export function Header() {
           </Link>
         </nav>
 
-        {/* Desktop Get Started - hidden on mobile */}
-        <Link
-          href="/signup"
-          className="hidden md:inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
-          style={{ backgroundColor: "#5A2D8F" }}
-        >
-          Get Started
-        </Link>
+        {/* Desktop: Dashboard when logged in, Get Started when not */}
+        {isLoggedIn ? (
+          <Link
+            href="/dashboard"
+            className="hidden md:inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
+            style={{ backgroundColor: "#5A2D8F" }}
+          >
+            Dashboard
+          </Link>
+        ) : (
+          <Link
+            href="/signup"
+            className="hidden md:inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
+            style={{ backgroundColor: "#5A2D8F" }}
+          >
+            Get Started
+          </Link>
+        )}
 
         {/* Hamburger button - visible only on mobile */}
         <button
@@ -105,14 +129,25 @@ export function Header() {
             >
               FAQ
             </Link>
-            <Link
-              href="/signup"
-              onClick={() => setMenuOpen(false)}
-              className="mx-4 my-2 rounded-lg px-4 py-3 text-sm font-semibold text-white text-center transition hover:opacity-90"
-              style={{ backgroundColor: "#5A2D8F" }}
-            >
-              Get Started
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMenuOpen(false)}
+                className="mx-4 my-2 rounded-lg px-4 py-3 text-sm font-semibold text-white text-center transition hover:opacity-90"
+                style={{ backgroundColor: "#5A2D8F" }}
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/signup"
+                onClick={() => setMenuOpen(false)}
+                className="mx-4 my-2 rounded-lg px-4 py-3 text-sm font-semibold text-white text-center transition hover:opacity-90"
+                style={{ backgroundColor: "#5A2D8F" }}
+              >
+                Get Started
+              </Link>
+            )}
           </nav>
         </div>
       )}

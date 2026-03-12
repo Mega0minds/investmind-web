@@ -54,3 +54,33 @@ body {
 .card-row-wrap:hover .card-track {
   animation-play-state: paused;
 }
+
+/* Auth: smooth panel entrance (swap animation) */
+@keyframes auth-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes auth-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-auth-in-left {
+  animation: auth-in-left 0.6s ease-out 0.05s forwards;
+  opacity: 0;
+}
+.animate-auth-in-right {
+  animation: auth-in-right 0.6s ease-out 0.05s forwards;
+  opacity: 0;
+}

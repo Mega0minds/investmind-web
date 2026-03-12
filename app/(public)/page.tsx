@@ -19,7 +19,7 @@ export default function Landing() {
           />
           <div className="flex flex-col justify-center bg-[#5A2D8F] min-h-[60vh] sm:min-h-[55vh] md:min-h-screen px-4 py-8 sm:px-6 sm:py-10 md:px-12 md:py-16 pt-20 sm:pt-24 md:pt-32 order-1 md:order-2">
             <h1
-              className="max-w-full md:max-w-lg font-bold text-white text-left break-words"
+              className="max-w-full md:max-w-lg font-bold text-white text-left wrap-break-word"
               style={{
                 fontSize: "clamp(1.35rem, 3.5vw + 0.5rem, 2.75rem)",
                 lineHeight: 1.25,
@@ -62,7 +62,7 @@ export default function Landing() {
         />
         <div className="flex flex-col justify-center px-4 py-10 sm:px-6 sm:py-12 md:px-12 lg:px-16 order-1 md:order-2">
           <h2
-            className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-tight break-words"
+            className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-tight wrap-break-word"
             style={{
               color: "#4A4A4A",
               fontSize: "clamp(1.35rem, 4vw + 0.5rem, 2.75rem)",
@@ -81,7 +81,7 @@ export default function Landing() {
       >
         <div className="mx-auto max-w-6xl w-full min-w-0">
           <h2
-            className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-center mb-3 sm:mb-4 px-2 break-words"
+            className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-center mb-3 sm:mb-4 px-2 wrap-break-word"
             style={{ color: "#4A4A4A" }}
           >
             Discover Africa&apos;s Next Big Ideas
@@ -224,7 +224,7 @@ export default function Landing() {
         style={{ backgroundColor: "#5A2D8F" }}
       >
         <div className="mx-auto max-w-2xl w-full min-w-0">
-          <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 px-2 break-words">
+          <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 px-2 wrap-break-word">
             Ready to Turn Your Idea Into Reality?
           </h2>
           <p className="text-white/90 text-sm sm:text-base md:text-lg mb-6 sm:mb-8 px-2">

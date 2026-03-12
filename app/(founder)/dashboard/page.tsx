@@ -1,7 +1,13 @@
-export default function FounderDashboard() {
+import { DashboardShell } from "../_components/DashboardShell";
+import { DashboardWelcome } from "../_components/DashboardWelcome";
+
+/**
+ * Founder dashboard. Screen content lives in (founder)/_components.
+ */
+export default function FounderDashboardPage() {
   return (
-    <div>
-      <h1>Founder Dashboard</h1>
-    </div>
+    <DashboardShell title="Dashboard">
+      <DashboardWelcome />
+    </DashboardShell>
   );
 }

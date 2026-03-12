@@ -1,14 +1,14 @@
 import { AuthLayout } from "../_components/AuthLayout";
 import { AuthHero } from "../_components/AuthHero";
-import { LoginForm } from "../_components/LoginForm";
+import { ForgotPasswordForm } from "../_components/ForgotPasswordForm";
 
 /**
- * Login route. UI lives in (auth)/_components so this file stays thin.
+ * Forgot password: enter email to receive a reset link.
  */
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <AuthLayout formOnRight hero={<AuthHero image="/assets/signup.png" />}>
-      <LoginForm />
+      <ForgotPasswordForm />
     </AuthLayout>
   );
 }

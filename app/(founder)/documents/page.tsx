@@ -1,7 +1,9 @@
+import { DashboardShell } from "../_components/DashboardShell";
+
 export default function Documents() {
   return (
-    <div>
-      <h1>Documents</h1>
-    </div>
+    <DashboardShell title="Documents">
+      <p className="text-gray-600">Your documents and files. (Coming soon.)</p>
+    </DashboardShell>
   );
 }

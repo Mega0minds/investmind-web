@@ -1,7 +1,14 @@
-export default function Signup() {
+import { AuthLayout } from "../_components/AuthLayout";
+import { AuthHero } from "../_components/AuthHero";
+import { SignupForm } from "../_components/SignupForm";
+
+/**
+ * Signup route. UI lives in (auth)/_components so this file stays thin.
+ */
+export default function SignupPage() {
   return (
-    <div>
-      <h1>Sign Up</h1>
-    </div>
+    <AuthLayout hero={<AuthHero image="/assets/signup.png" />}>
+      <SignupForm />
+    </AuthLayout>
   );
 }
