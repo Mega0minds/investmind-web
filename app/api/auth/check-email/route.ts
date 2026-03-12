@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
     const supabase = createAdminClient();
     const { data: { users }, error } = await supabase.auth.admin.listUsers({
-      per_page: 1000,
+      perPage: 1000,
     });
     if (error) {
       console.error("check-email listUsers:", error.message);
