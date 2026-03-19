@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/founder/dashboard", destination: "/dashboard", permanent: true },
+      { source: "/messages", destination: "/community", permanent: true },
     ];
   },
 };

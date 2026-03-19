@@ -5,10 +5,16 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { THEME } from "@/lib/constants";
 
-const STATS = [
+const STATS: Array<{
+  label: string;
+  value: string;
+  icon: "bulb" | "doc" | "chat";
+  color: "blue" | "purple" | "gray";
+  tag?: string;
+}> = [
   { label: "Ideas Submitted", value: "08", icon: "bulb", color: "blue" },
   { label: "Investor Requests", value: "24", icon: "doc", color: "purple" },
-  { label: "Mentor Connections", value: "15", tag: "Active", icon: "chat", color: "purple" },
+  { label: "Mentor Connections", value: "15", icon: "chat", color: "purple" },
 ];
 
 const PROJECTS = [
@@ -24,7 +30,7 @@ const PROJECTS = [
     title: "NairaFlow AI",
     status: "DRAFT",
     statusColor: "orange",
-    description: "AI-driven credit scoring system for unbanked micro-entrepreneurs acros...",
+    description: "AI-driven credit scoring system for unbanked micro-entrepreneurs across...",
     image: "mobile",
     href: "/listings/nairaflow-ai",
   },
@@ -78,7 +84,7 @@ export function DashboardWelcome() {
             Upload New Idea
           </Link>
           <Link
-            href="/explore"
+            href="/explore-ideas"
             className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border border-gray-200 bg-white px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 whitespace-nowrap"
           >
             <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,21 +106,23 @@ export function DashboardWelcome() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3">
         {STATS.map((stat) => (
           <div
             key={stat.label}
-            className="relative rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm transition hover:shadow-md min-w-0"
+            className="relative rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm transition hover:shadow-md min-w-0"
           >
             {stat.tag && (
-              <span className="absolute top-3 right-3 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
+              <span className="absolute top-2 right-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] sm:text-xs font-medium text-indigo-800">
                 {stat.tag}
               </span>
             )}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">{stat.label}</p>
-                <p className="mt-1 text-xl sm:text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-[11px] leading-4 sm:text-xs sm:leading-5 font-medium text-gray-500 wrap-break-word">
+                  {stat.label}
+                </p>
+                <p className="mt-1 text-lg sm:text-2xl font-bold text-gray-900">{stat.value}</p>
               </div>
               <div
                 className={`shrink-0 rounded-lg sm:rounded-xl p-2 sm:p-2.5 ${
@@ -153,7 +161,11 @@ export function DashboardWelcome() {
           <section className="min-w-0">
             <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">My Projects</h3>
-              <Link href="/listings" className="text-xs sm:text-sm font-medium text-[#2563EB] hover:underline shrink-0">
+              <Link
+                href="/listings"
+                className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                style={{ color: THEME.primary }}
+              >
                 View All
               </Link>
             </div>
@@ -163,7 +175,7 @@ export function DashboardWelcome() {
                   key={proj.title}
                   className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
                 >
-                  <div className="h-28 sm:h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0">
+                  <div className="h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0">
                     {proj.image === "circuit" ? (
                       <div className="w-16 h-16 rounded-lg bg-gray-300/80 flex items-center justify-center">
                         <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
@@ -193,7 +205,8 @@ export function DashboardWelcome() {
                     <div className="flex flex-wrap gap-2">
                       <Link
                         href={proj.href}
-                        className="rounded-lg bg-[#2563EB] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white hover:bg-[#1d4ed8] transition"
+                        className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
+                        style={{ backgroundColor: THEME.primary }}
                       >
                         View
                       </Link>
@@ -213,7 +226,11 @@ export function DashboardWelcome() {
           <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
             <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Recent Investor Requests</h3>
-              <Link href="/messages" className="text-xs sm:text-sm font-medium text-[#2563EB] hover:underline shrink-0">
+              <Link
+                href="/community"
+                className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                style={{ color: THEME.primary }}
+              >
                 Manage All
               </Link>
             </div>
@@ -230,7 +247,8 @@ export function DashboardWelcome() {
                     <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
                       <button
                         type="button"
-                        className="rounded-lg bg-[#2563EB] px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-white hover:bg-[#1d4ed8] transition"
+                        className="rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
+                        style={{ backgroundColor: THEME.primary }}
                       >
                         Approve
                       </button>
@@ -264,7 +282,8 @@ export function DashboardWelcome() {
                   </div>
                   <Link
                     href="/mentorship"
-                    className="text-xs sm:text-sm font-medium text-[#2563EB] hover:underline shrink-0"
+                    className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                    style={{ color: THEME.primary }}
                   >
                     Request Mentorship
                   </Link>

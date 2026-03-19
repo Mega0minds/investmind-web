@@ -11,10 +11,10 @@ const SIDEBAR_ID = "dashboard-sidebar";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "grid" },
-  { href: "/explore", label: "Explore Ideas", icon: "eye" },
+  { href: "/explore-ideas", label: "Explore Ideas", icon: "eye" },
   { href: "/listings", label: "My Projects", icon: "folder" },
   { href: "/mentorship", label: "Mentorship Hub", icon: "cap" },
-  { href: "/messages", label: "Messages", icon: "message" },
+  { href: "/community", label: "Community", icon: "community" },
   { href: "/notifications", label: "Notifications", icon: "bell" },
   { href: "/settings", label: "Settings", icon: "gear" },
 ] as const;
@@ -42,9 +42,9 @@ const iconMap: Record<string, ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
     </svg>
   ),
-  message: (
+  community: (
     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
     </svg>
   ),
   bell: (
@@ -99,7 +99,7 @@ export function DashboardShell({
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] overflow-x-hidden">
+    <div className="h-screen flex flex-col md:flex-row bg-[#f8fafc] overflow-hidden overflow-x-hidden">
       {/* Mobile overlay */}
       <button
         type="button"
@@ -161,9 +161,9 @@ export function DashboardShell({
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header bar */}
-        <header className="sticky top-0 z-10 shrink-0 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-white border-b border-gray-200 shadow-sm min-h-[52px]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top header bar (non-sticky; main scrolls) */}
+        <header className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-white border-b border-gray-200 shadow-sm min-h-[52px]">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -193,12 +193,12 @@ export function DashboardShell({
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Link
-              href="/messages"
+              href="/community"
               className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
-              aria-label="Messages"
+              aria-label="Community"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </Link>
             <Link
@@ -219,7 +219,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0 max-w-full overscroll-contain">
           {title && (
             <h1 className="text-2xl font-bold mb-6 sr-only" style={{ color: THEME.text }}>
               {title}
