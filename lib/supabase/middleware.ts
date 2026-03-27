@@ -1,16 +1,20 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getPublicSupabaseConfigOrNull } from "./public-env";
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-  if (!url || !key) return response;
+  const response = NextResponse.next({ request });
+  const cfg = getPublicSupabaseConfigOrNull();
+  if (!cfg) return response;
+  const { url, anonKey } = cfg;
 
-  const supabase = createServerClient(url, key, {
+  // Skip remote auth checks for anonymous visitors to avoid slow retries.
+  const hasSupabaseSessionCookie = request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-") && name.includes("auth-token"));
+  if (!hasSupabaseSessionCookie) return response;
+
+  const supabase = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -23,6 +27,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Avoid crashing or log floods when Supabase is temporarily unreachable.
+    return response;
+  }
   return response;
 }

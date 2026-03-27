@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 // POST create, GET list
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({ message: "List listings" });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   return NextResponse.json({ message: "Create listing" });
 }

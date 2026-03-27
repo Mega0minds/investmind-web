@@ -9,16 +9,23 @@ export function Footer() {
       <div className="mx-auto max-w-6xl w-full min-w-0">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 sm:gap-8">
           {/* Logo */}
-          <Link
-            href="/"
-            className="text-lg font-semibold italic tracking-tight"
-            style={{
-              color: "#fff",
-              fontFamily: "Georgia, 'Times New Roman', serif",
-            }}
-          >
-            InvestMind
-          </Link>
+          <div>
+            <Link
+              href="/"
+              className="text-lg font-semibold italic tracking-tight"
+              style={{
+                color: "#fff",
+                fontFamily: "Georgia, 'Times New Roman', serif",
+              }}
+            >
+              InvestMind
+            </Link>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.9)" }}>
+              Empowering ideas. Building stability.
+              <br />
+              Creating futures
+            </p>
+          </div>
 
           {/* Links */}
           <nav className="flex flex-wrap items-center gap-4 sm:gap-6">

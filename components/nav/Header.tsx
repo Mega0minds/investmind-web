@@ -59,7 +59,7 @@ export function Header() {
           </Link>
         </nav>
 
-        {/* Desktop: Dashboard when logged in, Get Started when not */}
+        {/* Desktop: Dashboard when logged in, Login + Get Started when not */}
         {isLoggedIn ? (
           <Link
             href="/dashboard"
@@ -69,13 +69,22 @@ export function Header() {
             Dashboard
           </Link>
         ) : (
-          <Link
-            href="/signup"
-            className="hidden md:inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
-            style={{ backgroundColor: "#5A2D8F" }}
-          >
-            Get Started
-          </Link>
+          <div className="hidden md:flex items-center gap-3 shrink-0">
+            <Link
+              href="/login"
+              className="inline-flex rounded-lg px-4 py-2 text-sm font-semibold transition hover:opacity-80"
+              style={{ color: NAV_TEXT }}
+            >
+              Login
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: "#5A2D8F" }}
+            >
+              Get Started
+            </Link>
+          </div>
         )}
 
         {/* Hamburger button - visible only on mobile */}
@@ -139,14 +148,24 @@ export function Header() {
                 Dashboard
               </Link>
             ) : (
-              <Link
-                href="/signup"
-                onClick={() => setMenuOpen(false)}
-                className="mx-4 my-2 rounded-lg px-4 py-3 text-sm font-semibold text-white text-center transition hover:opacity-90"
-                style={{ backgroundColor: "#5A2D8F" }}
-              >
-                Get Started
-              </Link>
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="px-4 py-3 text-sm font-semibold transition hover:bg-gray-50"
+                  style={{ color: NAV_TEXT }}
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={() => setMenuOpen(false)}
+                  className="mx-4 my-2 rounded-lg px-4 py-3 text-sm font-semibold text-white text-center transition hover:opacity-90"
+                  style={{ backgroundColor: "#5A2D8F" }}
+                >
+                  Get Started
+                </Link>
+              </>
             )}
           </nav>
         </div>

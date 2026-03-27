@@ -42,7 +42,7 @@ export function SignupForm() {
       typeof window !== "undefined"
         ? `${window.location.origin}/login`
         : undefined;
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: signInUrl },

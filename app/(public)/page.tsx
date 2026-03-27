@@ -1,5 +1,6 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
+import { FaqAccordion } from "@/components/public/FaqAccordion";
 
 export default function Landing() {
   return (
@@ -11,10 +12,10 @@ export default function Landing() {
           className="grid w-full absolute inset-0 min-h-screen md:grid-cols-2 grid-cols-1"
         >
           <div
-            className="w-full min-h-[40vh] sm:min-h-[45vh] md:min-h-screen bg-[#bae6fd] bg-cover bg-center order-2 md:order-1"
+            className="w-full min-h-[40vh] sm:min-h-[45vh] md:min-h-screen bg-[#bae6fd] bg-cover order-2 md:order-1 [--hero-bg-y:18%] md:[--hero-bg-y:6%]"
             style={{
-              backgroundImage: "url(/assets/home.png)",
-              backgroundPosition: "center 18%",
+              backgroundImage: "url(/assets/home.jpeg)",
+              backgroundPosition: "center var(--hero-bg-y)",
             }}
           />
           <div className="flex flex-col justify-center bg-[#5A2D8F] min-h-[60vh] sm:min-h-[55vh] md:min-h-screen px-4 py-8 sm:px-6 sm:py-10 md:px-12 md:py-16 pt-20 sm:pt-24 md:pt-32 order-1 md:order-2">
@@ -36,8 +37,8 @@ export default function Landing() {
               style={{ lineHeight: 1.75 }}
             >
               Across Africa, brilliant ideas struggle without exposure or
-              mentorship. InvestMind bridges that gap by connecting youth
-              innovators with investors, mentors, and a supportive community.
+              mentorship. InvestMind bridges that gap by connecting young
+              innovators and inventors with investors, mentors, and a supportive community.
             </p>
           </div>
         </section>
@@ -189,32 +190,7 @@ export default function Landing() {
           >
             Frequently Asked Questions
           </h2>
-          <dl className="space-y-5 sm:space-y-6">
-            <div>
-              <dt className="text-sm sm:text-base md:text-lg font-semibold mb-1.5 sm:mb-2" style={{ color: "#4A4A4A" }}>
-                What is InvestMind?
-              </dt>
-              <dd className="text-xs sm:text-sm md:text-base leading-relaxed" style={{ color: "#6B7280" }}>
-                InvestMind connects youth innovators across Africa with investors, mentors, and a supportive community so great ideas get the funding, guidance, and exposure they need to grow.
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm sm:text-base md:text-lg font-semibold mb-1.5 sm:mb-2" style={{ color: "#4A4A4A" }}>
-                Who can join?
-              </dt>
-              <dd className="text-xs sm:text-sm md:text-base leading-relaxed" style={{ color: "#6B7280" }}>
-                Innovators with an idea or early-stage venture, and investors or mentors who want to support talent in Africa can sign up and get started.
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm sm:text-base md:text-lg font-semibold mb-1.5 sm:mb-2" style={{ color: "#4A4A4A" }}>
-                How do I get started?
-              </dt>
-              <dd className="text-xs sm:text-sm md:text-base leading-relaxed" style={{ color: "#6B7280" }}>
-                Click Get Started, create your account, and complete your profile. You can then explore opportunities, apply for funding, or connect with mentors.
-              </dd>
-            </div>
-          </dl>
+          <FaqAccordion />
         </div>
       </section>
 

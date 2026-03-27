@@ -97,6 +97,7 @@ export function CompleteProfileForm() {
         full_name: fullName,
         role,
         age,
+        profile_visible: true,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }

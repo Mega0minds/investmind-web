@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,16 +14,12 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showEmailSentModal, setShowEmailSentModal] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get("email_sent") === "1") {
-      setShowEmailSentModal(true);
-    }
-  }, [searchParams]);
+  const [dismissedEmailSentModal, setDismissedEmailSentModal] = useState(false);
+  const showEmailSentModal =
+    searchParams.get("email_sent") === "1" && !dismissedEmailSentModal;
 
   function closeEmailSentModal() {
-    setShowEmailSentModal(false);
+    setDismissedEmailSentModal(true);
     router.replace("/login", { scroll: false });
   }
 
@@ -36,13 +32,47 @@ export function LoginForm() {
     if (!email || !password) return;
     const rememberMe = (form.elements.namedItem("remember") as HTMLInputElement)?.checked ?? true;
     setLoading(true);
-    const supabase = createClient(rememberMe);
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let supabase: ReturnType<typeof createClient>;
+    try {
+      supabase = createClient(rememberMe);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(
+        msg.includes("Missing Supabase env")
+          ? "Server configuration is incomplete. Add NEXT_PUBLIC_SUPABASE_URL and your anon key to .env.local, then restart the dev server."
+          : msg || "Something went wrong. Please try again."
+      );
+      setLoading(false);
+      return;
+    }
+    let signInData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"] | null = null;
+    let signInError: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["error"] | null = null;
+    try {
+      const result = await supabase.auth.signInWithPassword({ email, password });
+      signInData = result.data;
+      signInError = result.error;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/failed to fetch/i.test(msg)) {
+        setError(
+          "Cannot reach the sign-in service. Check your internet connection, that NEXT_PUBLIC_SUPABASE_URL and your anon key in .env.local are correct, and that your Supabase project is not paused."
+        );
+      } else {
+        setError(msg || "Something went wrong. Please try again.");
+      }
+      setLoading(false);
+      return;
+    }
     setLoading(false);
     if (signInError) {
+      const networkLike =
+        /failed to fetch|load failed|networkerror|network request failed/i.test(signInError.message);
+      if (networkLike) {
+        setError(
+          "Cannot reach the sign-in service. Check your internet connection, that NEXT_PUBLIC_SUPABASE_URL and your anon key in .env.local are correct, and that your Supabase project is not paused."
+        );
+        return;
+      }
       if (signInError.message === "Invalid login credentials") {
         const res = await fetch("/api/auth/check-email", {
           method: "POST",
