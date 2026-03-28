@@ -1,13 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileFormFields, type ProfileRowForSettings } from "@/lib/profile-fields";
 
-const FALLBACK_AVATAR =
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=320&q=80";
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+
+/** Two-letter initials for avatar when no photo is set. */
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0][0] ?? "";
+    const b = parts[parts.length - 1][0] ?? "";
+    return (a + b).toUpperCase() || "?";
+  }
+  const single = parts[0] ?? "";
+  if (single.length >= 2) return single.slice(0, 2).toUpperCase();
+  if (single.length === 1) return (single + single).toUpperCase();
+  return "?";
+}
 
 function Toggle({
   on,
@@ -61,8 +75,17 @@ export function SettingsPageClient({
   const [bio, setBio] = useState(initialBio);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [profileVisible, setProfileVisible] = useState(initialProfileVisible);
+  /** Last saved values for fields that “Save Changes” persists (visibility also updates via toggle). */
+  const [savedBaseline, setSavedBaseline] = useState(() => ({
+    fullName: initialFullName.trim(),
+    location: initialLocation.trim(),
+    bio: initialBio.trim(),
+    profileVisible: initialProfileVisible,
+  }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,18 +129,113 @@ export function SettingsPageClient({
 
       if (cancelled) return;
       const r = resolveProfileFormFields(profile, user);
+      const vis = profile?.profile_visible !== false;
       setFullName(r.fullName);
       setLocation(r.location);
       setBio(r.bio);
       setAvatarUrl(r.avatarUrl);
-      setProfileVisible(profile?.profile_visible !== false);
+      setProfileVisible(vis);
+      setSavedBaseline({
+        fullName: r.fullName.trim(),
+        location: r.location.trim(),
+        bio: r.bio.trim(),
+        profileVisible: vis,
+      });
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const displayAvatar = avatarUrl || FALLBACK_AVATAR;
+  const hasProfilePhoto = Boolean(avatarUrl?.trim());
+  const avatarInitials = initialsFromName(fullName);
+
+  function openAvatarPicker() {
+    avatarFileInputRef.current?.click();
+  }
+
+  async function handleAvatarFileSelected(file: File | undefined) {
+    if (!file) return;
+    setSaveMessage(null);
+    if (!file.type.startsWith("image/")) {
+      setSaveMessage("Please choose an image (JPEG, PNG, WebP, or GIF).");
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+      setSaveMessage("Use JPEG, PNG, WebP, or GIF.");
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      setSaveMessage("Photo must be 2 MB or smaller.");
+      return;
+    }
+
+    setAvatarUploading(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setAvatarUploading(false);
+      setSaveMessage("Session expired. Sign in again.");
+      return;
+    }
+
+    const path = `${user.id}/avatar`;
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
+      upsert: true,
+      contentType: file.type,
+      cacheControl: "3600",
+    });
+
+    if (uploadError) {
+      setAvatarUploading(false);
+      if (/bucket|not found/i.test(uploadError.message)) {
+        setSaveMessage(
+          "Photo storage is not set up yet. Run the storage section in supabase/run_once_profiles.sql (bucket avatars), then try again."
+        );
+      } else {
+        setSaveMessage(uploadError.message);
+      }
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+    const now = new Date().toISOString();
+
+    const { data: updatedRows, error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: publicUrl, updated_at: now })
+      .eq("id", user.id)
+      .select("id");
+
+    if (updateError) {
+      setAvatarUploading(false);
+      setSaveMessage(updateError.message);
+      return;
+    }
+
+    if (!updatedRows?.length) {
+      const { error: insertError } = await supabase.from("profiles").insert({
+        id: user.id,
+        email: user.email ?? null,
+        avatar_url: publicUrl,
+        profile_visible: true,
+        updated_at: now,
+      });
+      if (insertError) {
+        setAvatarUploading(false);
+        setSaveMessage(insertError.message);
+        return;
+      }
+    }
+
+    setAvatarUrl(`${publicUrl}?v=${Date.now()}`);
+    setAvatarUploading(false);
+    setSaveMessage("Profile photo updated.");
+    setTimeout(() => setSaveMessage(null), 3000);
+  }
 
   async function persistProfileVisible(next: boolean) {
     setSaveMessage(null);
@@ -158,8 +276,10 @@ export function SettingsPageClient({
       if (insertError) {
         setProfileVisible(prev);
         setSaveMessage(insertError.message);
+        return;
       }
     }
+    setSavedBaseline((b) => ({ ...b, profileVisible: next }));
   }
 
   async function handleSaveProfile() {
@@ -224,11 +344,37 @@ export function SettingsPageClient({
     }
     setSaveState("saved");
     setSaveMessage("Profile saved.");
+    setSavedBaseline({
+      fullName: trimmedName,
+      location: location.trim(),
+      bio: bio.trim(),
+      profileVisible,
+    });
     setTimeout(() => {
       setSaveState("idle");
       setSaveMessage(null);
     }, 2500);
   }
+
+  const saveMessageIsSuccess =
+    saveMessage === "Profile saved." || saveMessage === "Profile photo updated.";
+
+  const hasUnsavedProfileChanges = useMemo(
+    () =>
+      fullName.trim() !== savedBaseline.fullName ||
+      location.trim() !== savedBaseline.location ||
+      bio.trim() !== savedBaseline.bio ||
+      profileVisible !== savedBaseline.profileVisible,
+    [fullName, location, bio, profileVisible, savedBaseline]
+  );
+
+  const saveDisabled = saveState === "saving" || !hasUnsavedProfileChanges;
+
+  const saveButtonClass =
+    "shrink-0 rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold shadow-sm min-h-[44px] touch-manipulation w-full sm:w-auto transition " +
+    (saveDisabled
+      ? "cursor-not-allowed bg-gray-200 text-gray-500"
+      : "text-white hover:opacity-95");
 
   return (
     <div className="min-w-0 w-full max-w-6xl mx-auto pb-8">
@@ -240,7 +386,7 @@ export function SettingsPageClient({
           </p>
           {saveMessage && (
             <p
-              className={`text-sm mt-2 ${saveState === "error" ? "text-red-600" : "text-emerald-600"}`}
+              className={`text-sm mt-2 ${saveMessageIsSuccess ? "text-emerald-600" : "text-red-600"}`}
               role="status"
             >
               {saveMessage}
@@ -250,9 +396,9 @@ export function SettingsPageClient({
         <button
           type="button"
           onClick={handleSaveProfile}
-          disabled={saveState === "saving"}
-          className="shrink-0 rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 min-h-[44px] touch-manipulation w-full sm:w-auto disabled:opacity-70"
-          style={{ backgroundColor: THEME.primary }}
+          disabled={saveDisabled}
+          className={`hidden sm:inline-flex items-center justify-center ${saveButtonClass}`}
+          style={saveDisabled ? undefined : { backgroundColor: THEME.primary }}
         >
           {saveState === "saving" ? "Saving…" : "Save Changes"}
         </button>
@@ -263,30 +409,66 @@ export function SettingsPageClient({
           <h3 className="text-lg font-bold text-gray-900 mb-5">Profile Information</h3>
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="relative shrink-0 mx-auto sm:mx-0 w-36 h-36 sm:w-40 sm:h-40">
-              <div
-                className="w-full h-full rounded-2xl bg-cover bg-center border border-gray-100"
-                style={{ backgroundImage: `url(${displayAvatar})` }}
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept={AVATAR_ACCEPT}
+                className="sr-only"
+                aria-hidden
+                tabIndex={-1}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  void handleAvatarFileSelected(f);
+                }}
               />
               <button
                 type="button"
-                className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-600 hover:bg-gray-50 touch-manipulation"
-                aria-label="Change profile photo"
+                disabled={avatarUploading}
+                onClick={openAvatarPicker}
+                className="relative w-full h-full rounded-2xl border border-gray-100 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5A2D8F] focus-visible:ring-offset-2 disabled:opacity-60 touch-manipulation"
+                aria-label={
+                  hasProfilePhoto ? "Change profile photo (max 2 MB)" : "Add profile photo (max 2 MB)"
+                }
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                {hasProfilePhoto ? (
+                  <div
+                    className="w-full h-full bg-cover bg-center"
+                    style={{ backgroundImage: `url(${avatarUrl})` }}
+                    role="presentation"
                   />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
+                ) : (
+                  <div className="w-full h-full bg-[#E0E7FF] flex items-center justify-center text-[#3730A3] font-semibold text-3xl sm:text-4xl">
+                    {avatarInitials}
+                  </div>
+                )}
+                <span
+                  className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-600 pointer-events-none"
+                  aria-hidden
+                >
+                  {avatarUploading ? (
+                    <span className="w-5 h-5 border-2 border-gray-300 border-t-[#5A2D8F] rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  )}
+                </span>
               </button>
+              <p className="text-[11px] text-gray-400 text-center mt-2 max-w-40 mx-auto sm:mx-0 sm:text-left">
+                Tap to upload · JPEG, PNG, WebP, GIF · max 2 MB
+              </p>
             </div>
             <div className="flex-1 min-w-0 space-y-4">
               <div>
@@ -304,6 +486,11 @@ export function SettingsPageClient({
                 <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
                   Location
                 </label>
+                {!location.trim() && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    You haven&apos;t added a location yet. Enter your city or region below — it&apos;s optional and you can change it anytime.
+                  </p>
+                )}
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,7 +512,8 @@ export function SettingsPageClient({
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 pl-11 pr-4 py-2.5 text-gray-900 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
+                    placeholder="e.g. Nairobi, Kenya"
+                    className="w-full rounded-xl border border-gray-200 pl-11 pr-4 py-2.5 text-gray-900 text-sm sm:text-base placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
                   />
                 </div>
               </div>
@@ -333,14 +521,32 @@ export function SettingsPageClient({
                 <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
                   Bio
                 </label>
+                {!bio.trim() && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    No bio yet. Add a short introduction — what you do, what you&apos;re building, or what you care about.
+                  </p>
+                )}
                 <textarea
                   rows={3}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 resize-y min-h-[88px]"
+                  placeholder="Write your bio here…"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 text-sm sm:text-base placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 resize-y min-h-[88px]"
                 />
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-gray-100 sm:hidden">
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              disabled={saveDisabled}
+              className={`inline-flex w-full items-center justify-center ${saveButtonClass}`}
+              style={saveDisabled ? undefined : { backgroundColor: THEME.primary }}
+            >
+              {saveState === "saving" ? "Saving…" : "Save Changes"}
+            </button>
           </div>
         </section>
 

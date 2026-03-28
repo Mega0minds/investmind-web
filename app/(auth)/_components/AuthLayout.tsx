@@ -7,10 +7,13 @@ export function AuthLayout({
   children,
   hero,
   formOnRight = false,
+  /** When this changes (e.g. onboarding step), the hero/form columns replay the slide-in animation. */
+  panelKey,
 }: {
   children: ReactNode;
   hero: ReactNode;
   formOnRight?: boolean;
+  panelKey?: string | number;
 }) {
   const formCls =
     "w-full md:w-[55%] lg:w-[50%] h-full flex flex-col justify-center overflow-hidden px-4 sm:px-6 md:px-12 lg:px-16 py-4 sm:py-6 md:py-8 bg-white shrink-0 " +
@@ -18,6 +21,10 @@ export function AuthLayout({
   const heroCls =
     "hidden md:block shrink-0 md:w-[45%] lg:w-[50%] h-full bg-white " +
     (formOnRight ? "animate-auth-in-left" : "animate-auth-in-right");
+
+  // Stable key on the form column so swapping sides (onboarding steps) does not remount the form
+  // and wipe client state. Step-based key only on the hero replays its slide-in animation.
+  const heroMountKey = panelKey != null ? `auth-hero-${panelKey}` : "auth-hero";
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-white">
@@ -27,17 +34,21 @@ export function AuthLayout({
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         {formOnRight ? (
           <>
-            <div className={heroCls}>{hero}</div>
-            <div className={formCls}>
+            <div key={heroMountKey} className={heroCls}>
+              {hero}
+            </div>
+            <div key="auth-form" className={formCls}>
               <div className="flex flex-col justify-center min-h-0 max-h-full">{children}</div>
             </div>
           </>
         ) : (
           <>
-            <div className={formCls}>
+            <div key="auth-form" className={formCls}>
               <div className="flex flex-col justify-center min-h-0 max-h-full">{children}</div>
             </div>
-            <div className={heroCls}>{hero}</div>
+            <div key={heroMountKey} className={heroCls}>
+              {hero}
+            </div>
           </>
         )}
       </div>

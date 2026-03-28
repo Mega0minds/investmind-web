@@ -5,6 +5,12 @@ import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REQUIREMENTS_HINT,
+  validateNewPassword,
+} from "@/lib/password-policy";
 import { createClient } from "@/lib/supabase/client";
 
 const CODE_LENGTH = 8;
@@ -90,8 +96,9 @@ export function ForgotPasswordForm() {
     const form = e.currentTarget;
     const newPassword = (form.elements.namedItem("newPassword") as HTMLInputElement).value;
     const confirmPassword = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
-    if (!newPassword || newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    const passwordError = validateNewPassword(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -156,7 +163,8 @@ export function ForgotPasswordForm() {
             id="new-password"
             className="py-2.5 sm:py-3"
             required
-            minLength={6}
+            minLength={PASSWORD_MIN_LENGTH}
+            maxLength={PASSWORD_MAX_LENGTH}
           />
           <PasswordInput
             label="Confirm new password"
@@ -166,8 +174,10 @@ export function ForgotPasswordForm() {
             id="confirm-new-password"
             className="py-2.5 sm:py-3"
             required
-            minLength={6}
+            minLength={PASSWORD_MIN_LENGTH}
+            maxLength={PASSWORD_MAX_LENGTH}
           />
+          <p className="text-xs text-[#9CA3AF] -mt-2">{PASSWORD_REQUIREMENTS_HINT}</p>
           <button
             type="submit"
             disabled={loading}

@@ -80,8 +80,11 @@ export function LoginForm() {
           body: JSON.stringify({ email }),
         });
         if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (data.exists === false) {
+          const data = (await res.json().catch(() => ({}))) as {
+            exists?: boolean;
+            checked?: boolean;
+          };
+          if (data.checked === true && data.exists === false) {
             setError("This email isn't registered. Sign up to create an account.");
             return;
           }

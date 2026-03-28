@@ -6,7 +6,25 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_REQUIREMENTS_HINT,
+  validateNewPassword,
+} from "@/lib/password-policy";
 import { createClient } from "@/lib/supabase/client";
+
+const DUPLICATE_EMAIL_MESSAGE =
+  "An account with this email already exists. Sign in instead.";
+
+function signUpErrorLooksLikeDuplicate(message: string) {
+  const m = message.toLowerCase();
+  return (
+    /already\s*registered|user\s*already|email\s*already|already\s*exists|duplicate|sign\s*in\s*instead/i.test(
+      m
+    ) || m.includes("already been registered")
+  );
+}
 
 export function SignupForm() {
   const router = useRouter();
@@ -22,12 +40,13 @@ export function SignupForm() {
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
     const confirmPassword = (form.elements.namedItem("confirmPassword") as HTMLInputElement).value;
     if (!email || !password) return;
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    const passwordError = validateNewPassword(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
     const termsChecked = (form.elements.namedItem("terms") as HTMLInputElement)?.checked;
@@ -37,25 +56,62 @@ export function SignupForm() {
     }
     // All frontend checks passed – only then call API
     setLoading(true);
-    const supabase = createClient();
-    const signInUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/login`
-        : undefined;
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: signInUrl },
-    });
-    if (signUpError) {
+    try {
+      try {
+        const checkRes = await fetch("/api/auth/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (checkRes.ok) {
+          const payload = (await checkRes.json().catch(() => ({}))) as {
+            exists?: boolean;
+            checked?: boolean;
+          };
+          if (payload.exists === true) {
+            setError(DUPLICATE_EMAIL_MESSAGE);
+            return;
+          }
+        }
+      } catch {
+        // If the check fails, still attempt signUp; duplicate is caught below.
+      }
+
+      const supabase = createClient();
+      const signInUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/login`
+          : undefined;
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: signInUrl },
+      });
+
+      if (signUpError) {
+        setError(
+          signUpErrorLooksLikeDuplicate(signUpError.message)
+            ? DUPLICATE_EMAIL_MESSAGE
+            : signUpError.message
+        );
+        return;
+      }
+
+      // GoTrue often returns a user with no identities when the email is already registered
+      // (to limit email enumeration). Treat that as "already signed up".
+      const identities = signUpData.user?.identities;
+      const duplicateByIdentities =
+        signUpData.user != null && Array.isArray(identities) && identities.length === 0;
+      if (duplicateByIdentities) {
+        setError(DUPLICATE_EMAIL_MESSAGE);
+        return;
+      }
+
+      router.push("/login?email_sent=1");
+      router.refresh();
+    } finally {
       setLoading(false);
-      setError(signUpError.message);
-      return;
     }
-    // Profile is created when they complete profile (one less round trip on signup)
-    setLoading(false);
-    router.push("/login?email_sent=1");
-    router.refresh();
   }
 
   return (
@@ -95,7 +151,8 @@ export function SignupForm() {
           id="signup-password"
           className="py-2.5 sm:py-3"
           required
-          minLength={6}
+          minLength={PASSWORD_MIN_LENGTH}
+          maxLength={PASSWORD_MAX_LENGTH}
         />
         <PasswordInput
           label="Confirm password"
@@ -105,8 +162,10 @@ export function SignupForm() {
           id="signup-confirm-password"
           className="py-2.5 sm:py-3"
           required
-          minLength={6}
+          minLength={PASSWORD_MIN_LENGTH}
+          maxLength={PASSWORD_MAX_LENGTH}
         />
+        <p className="text-xs text-[#9CA3AF] -mt-2">{PASSWORD_REQUIREMENTS_HINT}</p>
         <label className="flex items-start gap-3 cursor-pointer select-none">
           <input
             type="checkbox"

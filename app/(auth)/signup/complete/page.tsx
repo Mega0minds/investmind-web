@@ -1,15 +1,8 @@
-import { AuthLayout } from "../../_components/AuthLayout";
-import { AuthHero } from "../../_components/AuthHero";
-import { CompleteProfileForm } from "../../_components/CompleteProfileForm";
+import { CompleteProfilePageClient } from "./CompleteProfilePageClient";
 
 /**
- * Second step of signup: collect first name, last name, role, age.
- * User must be signed in (redirects to login otherwise).
+ * Finish signup: location (step 1) then profile (step 2). Hero panel swaps sides between steps.
  */
 export default function CompleteProfilePage() {
-  return (
-    <AuthLayout hero={<AuthHero image="/assets/signup.png" />}>
-      <CompleteProfileForm />
-    </AuthLayout>
-  );
+  return <CompleteProfilePageClient />;
 }

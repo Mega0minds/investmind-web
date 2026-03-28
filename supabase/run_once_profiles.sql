@@ -31,6 +31,8 @@ alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists location text;
 alter table public.profiles add column if not exists bio text;
 alter table public.profiles add column if not exists profile_visible boolean default true;
+alter table public.profiles add column if not exists country text;
+alter table public.profiles add column if not exists state text;
 
 -- Backfill: existing rows must not be null for NOT NULL toggle behavior
 update public.profiles set profile_visible = true where profile_visible is null;
@@ -70,3 +72,50 @@ alter table public.profiles
 alter table public.profiles drop constraint if exists profiles_age_check;
 alter table public.profiles
   add constraint profiles_age_check check (age is null or (age >= 13 and age <= 120));
+
+-- 5) Storage: profile photos (public bucket, 2 MB max, images only)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars',
+  'avatars',
+  true,
+  2097152,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Public read avatars" on storage.objects;
+drop policy if exists "Users upload own avatar folder" on storage.objects;
+drop policy if exists "Users update own avatar folder" on storage.objects;
+drop policy if exists "Users delete own avatar folder" on storage.objects;
+
+create policy "Public read avatars"
+  on storage.objects for select
+  using (bucket_id = 'avatars');
+
+create policy "Users upload own avatar folder"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users update own avatar folder"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users delete own avatar folder"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
