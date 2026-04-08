@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { THEME } from "@/lib/constants";
+import { PROFILE_BIO_MAX_LENGTH, THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileFormFields, type ProfileRowForSettings } from "@/lib/profile-fields";
+import { ChangePasswordModal } from "./_components/ChangePasswordModal";
+import { EliteReachCard, type EliteReachStats } from "./_components/EliteReachCard";
 
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
@@ -60,6 +62,7 @@ type SettingsPageClientProps = {
   initialBio: string;
   initialAvatarUrl: string | null;
   email: string;
+  eliteReach: EliteReachStats;
 };
 
 export function SettingsPageClient({
@@ -69,23 +72,27 @@ export function SettingsPageClient({
   initialBio,
   initialAvatarUrl,
   email,
+  eliteReach,
 }: SettingsPageClientProps) {
   const [fullName, setFullName] = useState(initialFullName);
   const [location, setLocation] = useState(initialLocation);
-  const [bio, setBio] = useState(initialBio);
+  const [bio, setBio] = useState(() =>
+    initialBio.slice(0, PROFILE_BIO_MAX_LENGTH)
+  );
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [profileVisible, setProfileVisible] = useState(initialProfileVisible);
   /** Last saved values for fields that “Save Changes” persists (visibility also updates via toggle). */
   const [savedBaseline, setSavedBaseline] = useState(() => ({
     fullName: initialFullName.trim(),
     location: initialLocation.trim(),
-    bio: initialBio.trim(),
+    bio: initialBio.slice(0, PROFILE_BIO_MAX_LENGTH).trim(),
     profileVisible: initialProfileVisible,
   }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,15 +137,16 @@ export function SettingsPageClient({
       if (cancelled) return;
       const r = resolveProfileFormFields(profile, user);
       const vis = profile?.profile_visible !== false;
+      const bioClamped = r.bio.slice(0, PROFILE_BIO_MAX_LENGTH);
       setFullName(r.fullName);
       setLocation(r.location);
-      setBio(r.bio);
+      setBio(bioClamped);
       setAvatarUrl(r.avatarUrl);
       setProfileVisible(vis);
       setSavedBaseline({
         fullName: r.fullName.trim(),
         location: r.location.trim(),
-        bio: r.bio.trim(),
+        bio: bioClamped.trim(),
         profileVisible: vis,
       });
     })();
@@ -294,6 +302,11 @@ export function SettingsPageClient({
       setSaveMessage("Session expired. Sign in again.");
       return;
     }
+    if (bio.length > PROFILE_BIO_MAX_LENGTH) {
+      setSaveState("error");
+      setSaveMessage(`Bio must be at most ${PROFILE_BIO_MAX_LENGTH} characters.`);
+      return;
+    }
     const trimmedName = fullName.trim();
     const parts = trimmedName.split(/\s+/).filter(Boolean);
     const firstName = parts[0] ?? "";
@@ -306,7 +319,7 @@ export function SettingsPageClient({
         first_name: firstName || null,
         last_name: lastName,
         location: location.trim() || null,
-        bio: bio.trim() || null,
+        bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
         updated_at: new Date().toISOString(),
       })
@@ -332,7 +345,7 @@ export function SettingsPageClient({
         first_name: firstName || null,
         last_name: lastName,
         location: location.trim() || null,
-        bio: bio.trim() || null,
+        bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
         updated_at: new Date().toISOString(),
       });
@@ -347,7 +360,7 @@ export function SettingsPageClient({
     setSavedBaseline({
       fullName: trimmedName,
       location: location.trim(),
-      bio: bio.trim(),
+      bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH),
       profileVisible,
     });
     setTimeout(() => {
@@ -529,10 +542,14 @@ export function SettingsPageClient({
                 <textarea
                   rows={3}
                   value={bio}
+                  maxLength={PROFILE_BIO_MAX_LENGTH}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Write your bio here…"
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 text-sm sm:text-base placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 resize-y min-h-[88px]"
                 />
+                <p className="text-xs text-gray-400 mt-1.5 text-right tabular-nums">
+                  {bio.length}/{PROFILE_BIO_MAX_LENGTH}
+                </p>
               </div>
             </div>
           </div>
@@ -591,6 +608,7 @@ export function SettingsPageClient({
             </div>
             <button
               type="button"
+              onClick={() => setChangePasswordOpen(true)}
               className="w-full rounded-xl border border-gray-200 bg-white py-2.5 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50 min-h-[44px] touch-manipulation"
             >
               Change Password
@@ -614,17 +632,7 @@ export function SettingsPageClient({
           </section>
         </div>
 
-        <section className="lg:col-span-8 rounded-2xl bg-slate-900 text-white p-6 sm:p-8 shadow-lg">
-          <span className="inline-block rounded-full bg-white/10 text-white/90 text-[10px] sm:text-xs font-bold tracking-wide px-3 py-1 mb-4">
-            FOUNDER ELITE STATUS
-          </span>
-          <p className="text-xl sm:text-2xl font-bold leading-snug">
-            Your profile is seen by <span className="text-white">45% more investors</span> this month.
-          </p>
-          <p className="text-sm text-slate-400 mt-4 max-w-xl">
-            Maintain your activity levels to keep your search ranking high.
-          </p>
-        </section>
+        <EliteReachCard {...eliteReach} />
 
         <section className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6 flex flex-col">
           <div
@@ -649,6 +657,12 @@ export function SettingsPageClient({
           </Link>
         </section>
       </div>
+
+      <ChangePasswordModal
+        email={email}
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+      />
     </div>
   );
 }

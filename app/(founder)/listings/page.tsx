@@ -1,10 +1,77 @@
 import Link from "next/link";
+import Image from "next/image";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
+import { DeleteProjectButton } from "./_components/DeleteProjectButton";
 
 const FILTERS = ["All Projects", "Published", "Drafts", "Under Review"] as const;
+type FilterValue = "all" | "published" | "drafts" | "under-review";
 
-export default function FounderListings() {
+type ProjectRow = {
+  id: string;
+  status: "draft" | "published";
+  step: number;
+  project_name: string | null;
+  tagline: string | null;
+  cover_image_file_name: string | null;
+  updated_at: string | null;
+};
+
+function completionPct(step: number): number {
+  const s = Math.max(1, Math.min(5, step || 1));
+  return Math.round((s / 5) * 100);
+}
+
+function toPublicMediaUrl(path: string | null): string | null {
+  if (!path) return null;
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  if (!baseUrl) return null;
+  const encodedPath = path
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  return `${baseUrl}/storage/v1/object/public/project-media/${encodedPath}`;
+}
+
+export default async function FounderListings({
+  searchParams,
+}: {
+  searchParams?: Promise<{ filter?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const rawFilter = resolvedSearchParams?.filter;
+  const activeFilter: FilterValue =
+    rawFilter === "published" || rawFilter === "drafts" || rawFilter === "under-review"
+      ? rawFilter
+      : "all";
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  let projects: ProjectRow[] = [];
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, status, step, project_name, tagline, cover_image_file_name, updated_at")
+    .eq("creator_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (!error && Array.isArray(data)) {
+    projects = data as ProjectRow[];
+  }
+
+  const filteredProjects =
+    activeFilter === "all"
+      ? projects
+      : activeFilter === "published"
+      ? projects.filter((p) => p.status === "published")
+      : activeFilter === "drafts"
+      ? projects.filter((p) => p.status === "draft")
+      : [];
+
   return (
     <DashboardShell title="My Projects">
       <div className="min-w-0 w-full max-w-full overflow-x-hidden">
@@ -30,153 +97,114 @@ export default function FounderListings() {
 
         {/* Filter chips */}
         <div className="flex items-stretch gap-2 overflow-x-auto pb-2 -mx-1 px-1 sm:mx-0 sm:px-0 snap-x snap-mandatory touch-pan-x mb-4 sm:mb-6">
-          {FILTERS.map((label, i) => (
-            <button
+          {FILTERS.map((label) => {
+            const value: FilterValue =
+              label === "Published"
+                ? "published"
+                : label === "Drafts"
+                ? "drafts"
+                : label === "Under Review"
+                ? "under-review"
+                : "all";
+            const isActive = activeFilter === value;
+            const href = value === "all" ? "/listings" : `/listings?filter=${value}`;
+            return (
+            <Link
               key={label}
-              type="button"
+              href={href}
               className={
-                i === 0
+                isActive
                   ? "snap-start shrink-0 rounded-full px-4 py-2.5 text-xs sm:text-sm font-semibold text-white min-h-[44px] inline-flex items-center shadow-sm"
                   : "snap-start shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-xs sm:text-sm font-medium text-gray-700 min-h-[44px] inline-flex items-center hover:bg-gray-50 transition shadow-sm"
               }
-              style={i === 0 ? { backgroundColor: THEME.primary } : undefined}
+              style={isActive ? { backgroundColor: THEME.primary } : undefined}
             >
               {label}
-            </button>
-          ))}
+            </Link>
+          )})}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-w-0">
           {/* Main project grid */}
           <div className="lg:col-span-8 min-w-0 order-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* SolarGrid Connect — Published */}
-              <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0">
-                <div className="relative h-36 sm:h-40 bg-linear-to-br from-amber-100 to-orange-200 shrink-0">
-                  <div
-                    className="absolute inset-0 bg-cover bg-center opacity-90"
-                    style={{
-                      backgroundImage:
-                        "url(https://images.unsplash.com/photo-1509391366360-2e959784a276?w=600&q=80)",
-                    }}
-                  />
-                  <span className="absolute top-3 right-3 rounded-full bg-teal-500 text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 shadow">
-                    PUBLISHED
-                  </span>
-                </div>
-                <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base">SolarGrid Connect</h3>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                    <span>1,402 Views</span>
-                    <span>24 Investor Requests</span>
-                  </p>
-                  <div className="mt-3 sm:mt-4 flex items-center gap-2 flex-wrap">
-                    <Link
-                      href="/listings/solargrid-connect"
-                      className="flex-1 min-w-[120px] rounded-xl py-2.5 sm:py-2 text-center text-sm font-semibold text-[#5A2D8F] bg-[#EDE9F5] hover:bg-[#E5DEF0] transition"
-                    >
-                      View
-                    </Link>
-                    <Link
-                      href="/listings/solargrid-connect/edit"
-                      className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
-                      aria-label="Edit"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </Link>
-                    <Link
-                      href="/listings/solargrid-connect/analytics"
-                      className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
-                      aria-label="Analytics"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              </article>
-
-              {/* NairaFlow AI — Draft + completion */}
-              <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0">
-                <div className="relative h-36 sm:h-40 shrink-0">
-                  <div
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{
-                      backgroundImage:
-                        "url(https://images.unsplash.com/photo-1560250097-0b93528c311a?w=600&q=80)",
-                    }}
-                  />
-                  <span className="absolute top-3 right-3 rounded-full bg-amber-400 text-amber-950 text-[10px] sm:text-xs font-bold px-2.5 py-1 shadow">
-                    DRAFT
-                  </span>
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-3 py-2">
-                    <div className="flex justify-between text-[10px] sm:text-xs text-white font-medium mb-1">
-                      <span>COMPLETION</span>
-                      <span>65%</span>
+              {filteredProjects.map((project) => {
+                const pct = completionPct(project.step);
+                const isDraft = project.status === "draft";
+                const title = project.project_name?.trim() || "Untitled Project";
+                const coverUrl = toPublicMediaUrl(project.cover_image_file_name);
+                return (
+                  <article
+                    key={project.id}
+                    className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0"
+                  >
+                    <div className="relative h-36 sm:h-40 bg-linear-to-br from-indigo-100 to-violet-200 shrink-0">
+                      {coverUrl && (
+                        <Image
+                          src={coverUrl}
+                          alt={`${title} cover`}
+                          fill
+                          unoptimized
+                          className="object-cover"
+                          sizes="(max-width: 640px) 100vw, 420px"
+                        />
+                      )}
+                      <span
+                        className={`absolute top-3 right-3 rounded-full text-[10px] sm:text-xs font-bold px-2.5 py-1 shadow ${
+                          isDraft
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}
+                      >
+                        {isDraft ? "DRAFT" : "PUBLISHED"}
+                      </span>
+                      {isDraft && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/45 px-3 py-2">
+                          <div className="flex justify-between text-[10px] sm:text-xs text-white font-medium mb-1">
+                            <span>COMPLETION</span>
+                            <span>{pct}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-white/30 overflow-hidden">
+                            <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="h-1.5 rounded-full bg-white/30 overflow-hidden">
-                      <div className="h-full w-[65%] rounded-full bg-white" />
+                    <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{title}</h3>
+                      <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2 min-h-10">
+                        {project.tagline?.trim() || "No tagline yet."}
+                      </p>
+                      <div className="mt-3 sm:mt-4 flex items-center gap-2">
+                        <Link
+                          href={`/listings/manage/${project.id}`}
+                          className="flex-1 rounded-xl py-2.5 sm:py-2 text-center text-sm font-semibold text-[#5A2D8F] bg-[#EDE9F5] hover:bg-[#E5DEF0] transition min-h-[44px] inline-flex items-center justify-center"
+                        >
+                          View
+                        </Link>
+                        <Link
+                          href={`/listings/new?listingId=${project.id}&step=${Math.max(1, Math.min(5, project.step || 1))}`}
+                          className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                          aria-label="Edit"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </Link>
+                        <DeleteProjectButton projectId={project.id} />
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base">NairaFlow AI</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
-                    AI-driven credit scoring for unbanked micro-entrepreneurs.
-                  </p>
-                  <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row gap-2">
-                    <Link
-                      href="/listings/nairaflow-ai/edit"
-                      className="flex-1 rounded-xl py-2.5 text-center text-xs sm:text-sm font-semibold text-white min-h-[44px] inline-flex items-center justify-center"
-                      style={{ backgroundColor: THEME.primary }}
-                    >
-                      Continue Editing
-                    </Link>
-                    <Link
-                      href="#"
-                      className="flex-1 rounded-xl border border-gray-200 py-2.5 text-center text-xs sm:text-sm font-semibold text-gray-800 bg-white hover:bg-gray-50 min-h-[44px] inline-flex items-center justify-center"
-                    >
-                      Preview
-                    </Link>
-                  </div>
-                </div>
-              </article>
+                  </article>
+                );
+              })}
 
-              {/* AgroTrace — Under Review */}
-              <article className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0">
-                <div className="relative h-36 sm:h-40 bg-linear-to-br from-emerald-600 to-green-800 flex items-center justify-center shrink-0">
-                  <span className="text-white text-lg sm:text-xl font-bold tracking-tight">AgroTrace</span>
-                  <span className="absolute top-3 right-3 rounded-full bg-sky-100 text-sky-800 text-[10px] sm:text-xs font-bold px-2.5 py-1 shadow">
-                    UNDER REVIEW
-                  </span>
+              {!filteredProjects.length && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 text-center text-gray-500 sm:col-span-2">
+                  {activeFilter === "all"
+                    ? "No projects yet. Create your first one to see it here."
+                    : "No projects found for this filter."}
                 </div>
-                <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base">AgroTrace</h3>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-2">
-                    560 Views · 8 Investor Requests
-                  </p>
-                  <div className="mt-3 sm:mt-4 flex items-center gap-2">
-                    <Link
-                      href="/listings/agrotrace"
-                      className="flex-1 rounded-xl py-2.5 sm:py-2 text-center text-sm font-semibold text-[#5A2D8F] bg-[#EDE9F5] hover:bg-[#E5DEF0] transition min-h-[44px] sm:min-h-0 inline-flex items-center justify-center"
-                    >
-                      View
-                    </Link>
-                    <Link
-                      href="/listings/agrotrace/edit"
-                      className="p-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
-                      aria-label="Edit"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              </article>
+              )}
 
               {/* Start new innovation */}
               <Link
@@ -200,67 +228,9 @@ export default function FounderListings() {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-4 min-w-0 order-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-4">
-            {/* Platform Impact */}
-            <div className="rounded-2xl bg-[#2563EB] text-white p-4 sm:p-5 shadow-lg min-w-0">
-              <h3 className="font-bold text-sm sm:text-base mb-4">Platform Impact</h3>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-white/80">Total Pitch Value</p>
-                  <p className="text-2xl sm:text-3xl font-bold mt-0.5">$125.4k</p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/80">Investor Matches</p>
-                  <p className="text-2xl sm:text-3xl font-bold mt-0.5">12</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="mt-5 w-full rounded-xl bg-white/15 hover:bg-white/25 py-3 text-sm font-semibold border border-white/30 transition min-h-[48px] touch-manipulation"
-              >
-                Download Report
-              </button>
-            </div>
-
-            {/* Next Steps */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 min-w-0">
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-3">Next Steps</h3>
-              <ul className="space-y-3">
-                <li>
-                  <Link href="/mentorship" className="flex gap-3 p-2 -m-2 rounded-xl hover:bg-gray-50 transition min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Request Mentorship</p>
-                      <p className="text-xs text-gray-500 mt-0.5 wrap-break-word">
-                        Connect with experts in your field.
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/signup/complete" className="flex gap-3 p-2 -m-2 rounded-xl hover:bg-gray-50 transition min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Complete Profile</p>
-                      <p className="text-xs text-gray-500 mt-0.5 wrap-break-word">
-                        Boost visibility to top-tier VCs.
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
+          <div className="lg:col-span-4 min-w-0 order-2">
             {/* Latest Activity */}
-            <div className="md:col-span-2 lg:col-span-1 rounded-2xl bg-sky-50 border border-sky-100 p-4 sm:p-5 min-w-0">
+            <div className="rounded-2xl bg-sky-50 border border-sky-100 p-4 sm:p-5 min-w-0">
               <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-3">Latest Activity</h3>
               <p className="text-xs sm:text-sm text-gray-700 leading-relaxed wrap-break-word">
                 Venture Capital <span className="font-semibold">&quot;Atlas&quot;</span> viewed your{" "}

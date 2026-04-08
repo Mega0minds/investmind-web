@@ -17,3 +17,6 @@ export const THEME = {
   border: "#E5E7EB",
   white: "#ffffff",
 } as const;
+
+/** Max characters for profile bio (settings). */
+export const PROFILE_BIO_MAX_LENGTH = 300;

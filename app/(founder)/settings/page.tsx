@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  audienceRoleForProfileRole,
+  computeVisibilityGrowthPercent,
+  fetchProfileAudienceViewCounts,
+  normalizeSettingsEliteRole,
+} from "@/lib/profile-audience-stats";
 import { resolveProfileFormFields } from "@/lib/profile-fields";
 import { DashboardShell } from "../_components/DashboardShell";
 import { SettingsPageClient } from "./SettingsPageClient";
@@ -13,7 +19,7 @@ export default async function SettingsPage() {
 
   const profileResult = await supabase
     .from("profiles")
-    .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible")
+    .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -31,6 +37,7 @@ export default async function SettingsPage() {
           location: "" as string | null,
           bio: "" as string | null,
           profile_visible: true as boolean | null,
+          role: null as string | null,
         }
       : null;
   } else if (profileResult.error) {
@@ -39,6 +46,13 @@ export default async function SettingsPage() {
 
   const resolved = resolveProfileFormFields(profile, user);
   const initialProfileVisible = profile?.profile_visible !== false;
+
+  const eliteRole = normalizeSettingsEliteRole(profile?.role);
+  const audienceFilter = audienceRoleForProfileRole(profile?.role);
+  const viewCounts = await fetchProfileAudienceViewCounts(supabase, user.id, audienceFilter);
+  const elitePercent = viewCounts.error
+    ? null
+    : computeVisibilityGrowthPercent(viewCounts.thisMonth, viewCounts.lastMonth);
 
   return (
     <DashboardShell title="Settings">
@@ -49,6 +63,13 @@ export default async function SettingsPage() {
         initialBio={resolved.bio}
         initialAvatarUrl={resolved.avatarUrl}
         email={user.email ?? ""}
+        eliteReach={{
+          role: eliteRole,
+          percent: elitePercent,
+          thisMonth: viewCounts.thisMonth,
+          lastMonth: viewCounts.lastMonth,
+          statsReady: !viewCounts.error,
+        }}
       />
     </DashboardShell>
   );

@@ -1,3 +1,4 @@
+import { processLock } from "@supabase/auth-js";
 import { createBrowserClient } from "@supabase/ssr";
 import { getPublicSupabaseConfig } from "./public-env";
 
@@ -11,6 +12,11 @@ export function createClient(rememberMe: boolean = true) {
   // multiple GoTrue clients (avoids lock / "steal" races in React dev).
   return createBrowserClient(url, anonKey, {
     isSingleton: true,
+    auth: {
+      // Default navigatorLock + steal recovery throws AbortError under Strict Mode / HMR.
+      // In-process lock is enough for a single tab; cross-tab sync is cookie-based.
+      lock: processLock,
+    },
     ...(rememberMe ? {} : { cookieOptions: { maxAge: undefined } }),
   });
 }

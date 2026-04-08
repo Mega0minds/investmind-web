@@ -1,7 +1,12 @@
+"use client";
+
+import { DashboardShell } from "../../_components/DashboardShell";
+import { UploadProjectWizard } from "../_components/UploadProjectWizard";
+
 export default function NewListing() {
   return (
-    <div>
-      <h1>Create New Listing</h1>
-    </div>
+    <DashboardShell title="Upload Your Project">
+      <UploadProjectWizard />
+    </DashboardShell>
   );
 }
