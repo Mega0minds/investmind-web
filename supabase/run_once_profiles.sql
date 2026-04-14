@@ -67,7 +67,7 @@ create policy "Users can update own profile"
 -- 4) Validation (drop + re-add so re-run is safe)
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
-  add constraint profiles_role_check check (role is null or role in ('founder', 'investor'));
+  add constraint profiles_role_check check (role is null or role in ('founder', 'innovator', 'investor', 'mentor'));
 
 alter table public.profiles drop constraint if exists profiles_age_check;
 alter table public.profiles
@@ -266,3 +266,13 @@ create policy "Users delete own project media folder"
     bucket_id = 'project-media'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- 9) Published projects visible for Explore (public read)
+drop policy if exists "Public read published projects" on public.projects;
+create policy "Public read published projects"
+  on public.projects for select
+  using (status = 'published');
+
+-- 10) Founder interests + mentor expertise (for mentor recommendations)
+alter table public.profiles add column if not exists interest_sectors text[] not null default '{}';
+alter table public.profiles add column if not exists mentor_expertise text[] not null default '{}';

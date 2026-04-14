@@ -12,6 +12,7 @@ import {
   validateNewPassword,
 } from "@/lib/password-policy";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession } from "@/lib/supabase/safe-auth";
 
 /**
  * Shown when user lands here from the reset link in email.
@@ -25,7 +26,7 @@ export function ResetPasswordForm() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    safeGetSession(supabase).then((session) => {
       setReady(true);
       if (!session) {
         router.replace("/forgot-password");

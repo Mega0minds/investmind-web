@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeRole } from "@/lib/roles";
 
 function monthStartUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
@@ -61,13 +62,15 @@ export async function fetchProfileAudienceViewCounts(
 export type SettingsEliteRole = "founder" | "investor" | "unknown";
 
 export function audienceRoleForProfileRole(profileRole: string | null | undefined): AudienceRoleFilter | null {
-  if (profileRole === "founder") return "investor";
-  if (profileRole === "investor") return "founder";
+  const r = normalizeRole(profileRole);
+  if (r === "founder") return "investor";
+  if (r === "investor") return "founder";
   return null;
 }
 
 export function normalizeSettingsEliteRole(profileRole: string | null | undefined): SettingsEliteRole {
-  if (profileRole === "investor") return "investor";
-  if (profileRole === "founder") return "founder";
+  const r = normalizeRole(profileRole);
+  if (r === "investor") return "investor";
+  if (r === "founder") return "founder";
   return "unknown";
 }

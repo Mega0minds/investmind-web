@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -134,9 +135,7 @@ export function UploadProjectWizard() {
     let cancelled = false;
 
     (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await safeGetSession<{ user?: { id: string } }>(supabase);
       if (cancelled) return;
       if (!session?.user) return;
 

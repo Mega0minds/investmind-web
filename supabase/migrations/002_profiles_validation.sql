@@ -3,7 +3,7 @@
 -- These checks ensure: role is founder/investor when set; age is 13–120 when set.
 
 alter table public.profiles
-  add constraint profiles_role_check check (role is null or role in ('founder', 'investor'));
+  add constraint profiles_role_check check (role is null or role in ('founder', 'innovator', 'investor', 'mentor'));
 
 alter table public.profiles
   add constraint profiles_age_check check (age is null or (age >= 13 and age <= 120));

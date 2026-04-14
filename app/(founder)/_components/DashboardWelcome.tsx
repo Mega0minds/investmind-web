@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession, safeGetUser } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
+import { projectMediaPublicUrl } from "@/lib/project-media-url";
+import {
+  founderCategoryKeys,
+  initialsFromMentorName,
+  mentorDisplayName,
+  mentorExpertiseLabel,
+  mentorOverlapScore,
+  type MentorProfileRow,
+} from "@/lib/mentor-matching";
+import { rolesForAudienceFilter } from "@/lib/roles";
 
 const STATS: Array<{
   label: string;
@@ -17,40 +29,54 @@ const STATS: Array<{
   { label: "Mentor Connections", value: "15", icon: "chat", color: "purple" },
 ];
 
-const PROJECTS = [
-  {
-    title: "SolarGrid Connect",
-    status: "PUBLISHED",
-    statusColor: "green",
-    description: "Providing affordable decentralized solar energy solutions for rural Nigeria...",
-    image: "circuit",
-    href: "/listings/solargrid-connect",
-  },
-  {
-    title: "NairaFlow AI",
-    status: "DRAFT",
-    statusColor: "orange",
-    description: "AI-driven credit scoring system for unbanked micro-entrepreneurs across...",
-    image: "mobile",
-    href: "/listings/nairaflow-ai",
-  },
-];
+const DASHBOARD_PROJECT_LIMIT = 2;
+const DASHBOARD_EXPLORE_LIMIT = 6;
+
+type DashboardProjectRow = {
+  id: string;
+  status: "draft" | "published";
+  project_name: string | null;
+  tagline: string | null;
+  short_description: string | null;
+  cover_image_file_name: string | null;
+};
+
+type DashboardExploreIdeaRow = {
+  id: string;
+  project_name: string | null;
+  tagline: string | null;
+  short_description: string | null;
+  sector: string | null;
+  subcategory: string | null;
+  cover_image_file_name: string | null;
+  updated_at: string | null;
+};
 
 const RECENT_REQUESTS = [
   { from: "Marcus Sterling", org: "Sterling Ventures", message: "We are impressed by SolarGrid Connect's traction. Let's discuss a Seed A round.", time: "2h ago" },
 ];
 
-const MENTORS = [
-  { name: "Dr. Kwame Mensah", role: "Renewable Energy Expert", initials: "KM" },
-  { name: "Zainab Aliyu", role: "Fintech Scaling Specialist", initials: "ZA" },
-];
+type RecommendedMentor = {
+  id: string;
+  name: string;
+  role: string;
+  initials: string;
+};
 
 export function DashboardWelcome() {
   const [firstName, setFirstName] = useState<string>("there");
+  const [dashboardProjects, setDashboardProjects] = useState<DashboardProjectRow[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [mentors, setMentors] = useState<RecommendedMentor[]>([]);
+  const [mentorsLoading, setMentorsLoading] = useState(true);
+  const [mentorsHint, setMentorsHint] = useState<string | null>(null);
+  const [exploreIdeas, setExploreIdeas] = useState<DashboardExploreIdeaRow[]>([]);
+  const [exploreLoading, setExploreLoading] = useState(true);
+  const [exploreHint, setExploreHint] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    safeGetSession<{ user?: { id: string } }>(supabase).then((session) => {
       if (session?.user) {
         supabase
           .from("profiles")
@@ -62,6 +88,213 @@ export function DashboardWelcome() {
           });
       }
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const user = await safeGetUser<{ id: string }>(supabase);
+      if (!user) {
+        setProjectsLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, status, project_name, tagline, short_description, cover_image_file_name")
+        .eq("creator_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(DASHBOARD_PROJECT_LIMIT);
+      if (!cancelled) {
+        setProjectsLoading(false);
+        if (!error && Array.isArray(data)) {
+          setDashboardProjects(data as DashboardProjectRow[]);
+        } else {
+          setDashboardProjects([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const user = await safeGetUser<{ id: string }>(supabase);
+      if (!user) {
+        setMentorsLoading(false);
+        return;
+      }
+
+      const profileRes = await supabase
+        .from("profiles")
+        .select("interest_sectors")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const interestRaw =
+        profileRes.error ||
+        !Array.isArray((profileRes.data as { interest_sectors?: unknown } | null)?.interest_sectors)
+          ? []
+          : ((profileRes.data as { interest_sectors: string[] }).interest_sectors ?? []).filter(
+              (x): x is string => typeof x === "string" && x.trim().length > 0
+            );
+
+      const projectRes = await supabase
+        .from("projects")
+        .select("sector, subcategory")
+        .eq("creator_id", user.id);
+
+      const projectRows = projectRes.error ? [] : (projectRes.data ?? []);
+      const founderKeys = founderCategoryKeys(interestRaw, projectRows);
+
+      const { data: mentorRows, error } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, full_name, mentor_expertise")
+        .in("role", rolesForAudienceFilter("investor"))
+        .eq("profile_visible", true)
+        .neq("id", user.id)
+        .limit(40);
+
+      if (cancelled) return;
+      setMentorsLoading(false);
+
+      if (error || !mentorRows?.length) {
+        setMentors([]);
+        setMentorsHint(
+          error
+            ? null
+            : "No mentor profiles yet. Mentors appear here when they join with matching expertise."
+        );
+        return;
+      }
+
+      const rows = mentorRows as MentorProfileRow[];
+      const scored = rows
+        .map((m) => ({ m, score: mentorOverlapScore(m.mentor_expertise, founderKeys) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      let list = scored;
+      if (!list.length && founderKeys.length && rows.length) {
+        setMentorsHint("No mentors listed in your sectors yet. Try more interests in Settings.");
+        list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
+      } else if (!list.length && !founderKeys.length && rows.length) {
+        setMentorsHint(
+          "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories."
+        );
+        list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
+      } else {
+        setMentorsHint(null);
+      }
+
+      const cards: RecommendedMentor[] = list.slice(0, 8).map(({ m }) => {
+        const name = mentorDisplayName(m);
+        return {
+          id: m.id,
+          name,
+          role: mentorExpertiseLabel(m, founderKeys),
+          initials: initialsFromMentorName(name),
+        };
+      });
+      setMentors(cards);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const user = await safeGetUser<{ id: string }>(supabase);
+      if (!user) {
+        setExploreLoading(false);
+        return;
+      }
+
+      const profileRes = await supabase
+        .from("profiles")
+        .select("interest_sectors")
+        .eq("id", user.id)
+        .maybeSingle();
+      const interestRaw =
+        profileRes.error ||
+        !Array.isArray((profileRes.data as { interest_sectors?: unknown } | null)?.interest_sectors)
+          ? []
+          : ((profileRes.data as { interest_sectors: string[] }).interest_sectors ?? []).filter(
+              (x): x is string => typeof x === "string" && x.trim().length > 0
+            );
+
+      const myProjectsRes = await supabase
+        .from("projects")
+        .select("sector, subcategory")
+        .eq("creator_id", user.id);
+      const myProjects = myProjectsRes.error ? [] : (myProjectsRes.data ?? []);
+      const founderKeys = founderCategoryKeys(interestRaw, myProjects);
+      const founderKeySet = new Set(founderKeys.map((x) => x.toLowerCase()));
+
+      if (!founderKeySet.size) {
+        if (!cancelled) {
+          setExploreLoading(false);
+          setExploreIdeas([]);
+          setExploreHint("Add sectors in Settings or create a project so we can match ideas for you.");
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, project_name, tagline, short_description, sector, subcategory, cover_image_file_name, updated_at")
+        .eq("status", "published")
+        .neq("creator_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(60);
+
+      if (cancelled) return;
+      setExploreLoading(false);
+      if (error || !Array.isArray(data) || data.length === 0) {
+        setExploreIdeas([]);
+        setExploreHint("No matching published ideas yet.");
+        return;
+      }
+
+      const scored = (data as DashboardExploreIdeaRow[])
+        .map((idea) => {
+          const keys = [idea.sector, idea.subcategory]
+            .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+            .map((v) => v.trim().toLowerCase());
+          const score = keys.reduce((acc, k) => acc + (founderKeySet.has(k) ? 1 : 0), 0);
+          return { idea, score };
+        })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      const top = scored.slice(0, DASHBOARD_EXPLORE_LIMIT).map((x) => x.idea);
+      if (top.length) {
+        setExploreIdeas(top);
+        setExploreHint(null);
+        return;
+      }
+
+      // If no sector match yet, show latest published ideas as a temporary fallback.
+      const fallbackIdeas = (data as DashboardExploreIdeaRow[]).slice(0, DASHBOARD_EXPLORE_LIMIT);
+      if (fallbackIdeas.length) {
+        setExploreIdeas(fallbackIdeas);
+        setExploreHint("No matching published ideas yet. Showing recent ideas for now.");
+        return;
+      }
+
+      setExploreIdeas([]);
+      setExploreHint("No matching published ideas yet.");
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -170,57 +403,166 @@ export function DashboardWelcome() {
               </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {PROJECTS.map((proj) => (
-                <div
-                  key={proj.title}
-                  className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
-                >
-                  <div className="h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0">
-                    {proj.image === "circuit" ? (
-                      <div className="w-16 h-16 rounded-lg bg-gray-300/80 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="w-20 h-14 rounded-lg bg-gray-300/80 border border-gray-300 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3 sm:p-4 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
-                      <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{proj.title}</h4>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
-                          proj.statusColor === "green" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {proj.status}
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-3 sm:mb-4">{proj.description}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={proj.href}
-                        className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
-                        style={{ backgroundColor: THEME.primary }}
-                      >
-                        View
-                      </Link>
-                      <Link
-                        href={`${proj.href}/edit`}
-                        className="rounded-lg border border-gray-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                      >
-                        Edit
-                      </Link>
+              {projectsLoading ? (
+                <>
+                  <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse">
+                    <div className="h-28 sm:h-32 bg-gray-200" />
+                    <div className="p-3 sm:p-4 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded w-full" />
                     </div>
                   </div>
+                  <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse hidden sm:block">
+                    <div className="h-28 sm:h-32 bg-gray-200" />
+                    <div className="p-3 sm:p-4 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded w-full" />
+                    </div>
+                  </div>
+                </>
+              ) : dashboardProjects.length === 0 ? (
+                <div className="sm:col-span-2 rounded-xl sm:rounded-2xl border border-dashed border-gray-300 bg-gray-50/80 p-6 text-center">
+                  <p className="text-sm text-gray-600">No projects yet. Create your first idea to see it here.</p>
+                  <Link
+                    href="/listings/new"
+                    className="mt-3 inline-flex rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: THEME.primary }}
+                  >
+                    Upload New Idea
+                  </Link>
                 </div>
-              ))}
+              ) : (
+                dashboardProjects.map((proj) => {
+                  const title = proj.project_name?.trim() || "Untitled Project";
+                  const desc =
+                    proj.short_description?.trim() || proj.tagline?.trim() || "No description yet.";
+                  const isPublished = proj.status === "published";
+                  const coverUrl = projectMediaPublicUrl(proj.cover_image_file_name);
+                  return (
+                    <div
+                      key={proj.id}
+                      className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
+                    >
+                      <div className="relative h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 shrink-0">
+                        {coverUrl ? (
+                          <Image
+                            src={coverUrl}
+                            alt={title}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, 50vw"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-lg bg-gray-300/80 flex items-center justify-center">
+                              <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3 sm:p-4 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
+                          <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{title}</h4>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
+                              isPublished ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {isPublished ? "PUBLISHED" : "DRAFT"}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-3 sm:mb-4">{desc}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/listings/manage/${proj.id}`}
+                            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
+                            style={{ backgroundColor: THEME.primary }}
+                          >
+                            View
+                          </Link>
+                          <Link
+                            href={`/listings/new?listingId=${proj.id}&step=1`}
+                            className="rounded-lg border border-gray-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                          >
+                            Edit
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
+          </section>
+
+          <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Explore Ideas</h3>
+              <Link
+                href="/explore-ideas"
+                className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                style={{ color: THEME.primary }}
+              >
+                See more
+              </Link>
+            </div>
+
+            {exploreLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm animate-pulse">
+                    <div className="h-24 bg-gray-200" />
+                    <div className="p-3 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-2/3" />
+                      <div className="h-3 bg-gray-100 rounded w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : exploreIdeas.length === 0 ? (
+              <p className="text-sm text-gray-500">{exploreHint ?? "No matching ideas right now."}</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {exploreIdeas.map((idea) => {
+                  const title = idea.project_name?.trim() || "Untitled project";
+                  const desc = idea.short_description?.trim() || idea.tagline?.trim() || "No description yet.";
+                  const coverUrl = projectMediaPublicUrl(idea.cover_image_file_name);
+                  return (
+                    <div
+                      key={idea.id}
+                      className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
+                    >
+                      <div className="relative h-24 bg-linear-to-br from-gray-100 to-gray-200">
+                        {coverUrl ? (
+                          <Image
+                            src={coverUrl}
+                            alt={title}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="p-3 min-w-0">
+                        <h4 className="font-semibold text-gray-900 text-sm truncate">{title}</h4>
+                        <p className="text-xs text-gray-600 line-clamp-2 mt-1 mb-2">{desc}</p>
+                        <Link
+                          href={`/listings/${idea.id}`}
+                          className="text-xs font-medium hover:underline"
+                          style={{ color: THEME.primary }}
+                        >
+                          View details
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
@@ -270,26 +612,37 @@ export function DashboardWelcome() {
         <div className="space-y-4 sm:space-y-6 min-w-0">
           <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Recommended Mentors</h3>
-            <ul className="space-y-3 sm:space-y-4">
-              {MENTORS.map((m) => (
-                <li key={m.name} className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center text-xs sm:text-sm font-semibold text-purple-700 shrink-0">
-                    {m.initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{m.name}</p>
-                    <p className="text-xs sm:text-sm text-gray-500 truncate">{m.role}</p>
-                  </div>
-                  <Link
-                    href="/mentorship"
-                    className="text-xs sm:text-sm font-medium hover:underline shrink-0"
-                    style={{ color: THEME.primary }}
-                  >
-                    Request Mentorship
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {mentorsHint && (
+              <p className="text-xs text-gray-500 mb-3 wrap-break-word">{mentorsHint}</p>
+            )}
+            {mentorsLoading ? (
+              <p className="text-sm text-gray-500">Loading mentors…</p>
+            ) : mentors.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No matches yet. Add sectors in Settings or publish a project to see mentors in your space.
+              </p>
+            ) : (
+              <ul className="space-y-3 sm:space-y-4">
+                {mentors.map((m) => (
+                  <li key={m.id} className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center text-xs sm:text-sm font-semibold text-purple-700 shrink-0">
+                      {m.initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{m.name}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 truncate">{m.role}</p>
+                    </div>
+                    <Link
+                      href={`/mentorship?mentor=${encodeURIComponent(m.id)}`}
+                      className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                      style={{ color: THEME.primary }}
+                    >
+                      Request Mentorship
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { Logo } from "@/components/ui/Logo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
 
 const SIDEBAR_ID = "dashboard-sidebar";
@@ -127,7 +128,7 @@ export function DashboardShell({
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    safeGetSession<{ user?: { id: string } }>(supabase).then((session) => {
       if (session?.user) {
         supabase
           .from("profiles")

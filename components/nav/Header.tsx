@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession } from "@/lib/supabase/safe-auth";
 
 const NAV_TEXT = "#4A4A4A";
 
@@ -13,8 +14,8 @@ export function Header() {
   useEffect(() => {
     const supabase = createClient();
     // getSession() is faster (reads from storage); sufficient for nav display
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session?.user);
+    safeGetSession<{ user?: { id: string } }>(supabase).then((session) => {
+      setIsLoggedIn(Boolean(session?.user));
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session?.user);

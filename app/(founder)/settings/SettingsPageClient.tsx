@@ -5,6 +5,8 @@ import Link from "next/link";
 import { PROFILE_BIO_MAX_LENGTH, THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileFormFields, type ProfileRowForSettings } from "@/lib/profile-fields";
+import { FOUNDER_INTEREST_SECTOR_OPTIONS } from "@/lib/mentor-matching";
+import { normalizeRole } from "@/lib/roles";
 import { ChangePasswordModal } from "./_components/ChangePasswordModal";
 import { EliteReachCard, type EliteReachStats } from "./_components/EliteReachCard";
 
@@ -23,6 +25,13 @@ function initialsFromName(name: string): string {
   if (single.length >= 2) return single.slice(0, 2).toUpperCase();
   if (single.length === 1) return (single + single).toUpperCase();
   return "?";
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
 }
 
 function Toggle({
@@ -61,6 +70,8 @@ type SettingsPageClientProps = {
   initialLocation: string;
   initialBio: string;
   initialAvatarUrl: string | null;
+  initialInterestSectors: string[];
+  profileRole: string | null;
   email: string;
   eliteReach: EliteReachStats;
 };
@@ -71,9 +82,14 @@ export function SettingsPageClient({
   initialLocation,
   initialBio,
   initialAvatarUrl,
+  initialInterestSectors,
+  profileRole,
   email,
   eliteReach,
 }: SettingsPageClientProps) {
+  const normalizedProfileRole = normalizeRole(profileRole);
+  const isFounderRole = normalizedProfileRole === "founder";
+
   const [fullName, setFullName] = useState(initialFullName);
   const [location, setLocation] = useState(initialLocation);
   const [bio, setBio] = useState(() =>
@@ -87,12 +103,16 @@ export function SettingsPageClient({
     location: initialLocation.trim(),
     bio: initialBio.slice(0, PROFILE_BIO_MAX_LENGTH).trim(),
     profileVisible: initialProfileVisible,
+    interestSectors: initialInterestSectors.filter((x) => typeof x === "string" && x.trim()),
   }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [interestSectors, setInterestSectors] = useState<string[]>(() =>
+    initialInterestSectors.filter((x) => typeof x === "string" && x.trim())
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +125,7 @@ export function SettingsPageClient({
 
       const full = await supabase
         .from("profiles")
-        .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible")
+        .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, interest_sectors")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -126,6 +146,7 @@ export function SettingsPageClient({
               location: null,
               bio: null,
               profile_visible: true,
+              interest_sectors: [] as string[],
             }
           : null;
       } else if (full.error) {
@@ -138,16 +159,25 @@ export function SettingsPageClient({
       const r = resolveProfileFormFields(profile, user);
       const vis = profile?.profile_visible !== false;
       const bioClamped = r.bio.slice(0, PROFILE_BIO_MAX_LENGTH);
+      const loadedInterests = Array.isArray(
+        (profile as { interest_sectors?: unknown } | null)?.interest_sectors
+      )
+        ? ((profile as { interest_sectors: string[] }).interest_sectors ?? []).filter(
+            (x): x is string => typeof x === "string" && x.trim().length > 0
+          )
+        : [];
       setFullName(r.fullName);
       setLocation(r.location);
       setBio(bioClamped);
       setAvatarUrl(r.avatarUrl);
       setProfileVisible(vis);
+      setInterestSectors(loadedInterests);
       setSavedBaseline({
         fullName: r.fullName.trim(),
         location: r.location.trim(),
         bio: bioClamped.trim(),
         profileVisible: vis,
+        interestSectors: loadedInterests,
       });
     })();
     return () => {
@@ -321,6 +351,7 @@ export function SettingsPageClient({
         location: location.trim() || null,
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
+        ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
@@ -347,6 +378,7 @@ export function SettingsPageClient({
         location: location.trim() || null,
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
+        ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
         updated_at: new Date().toISOString(),
       });
       if (insertError) {
@@ -357,12 +389,13 @@ export function SettingsPageClient({
     }
     setSaveState("saved");
     setSaveMessage("Profile saved.");
-    setSavedBaseline({
+    setSavedBaseline((b) => ({
       fullName: trimmedName,
       location: location.trim(),
       bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH),
       profileVisible,
-    });
+      interestSectors: isFounderRole ? [...interestSectors] : b.interestSectors,
+    }));
     setTimeout(() => {
       setSaveState("idle");
       setSaveMessage(null);
@@ -377,8 +410,9 @@ export function SettingsPageClient({
       fullName.trim() !== savedBaseline.fullName ||
       location.trim() !== savedBaseline.location ||
       bio.trim() !== savedBaseline.bio ||
-      profileVisible !== savedBaseline.profileVisible,
-    [fullName, location, bio, profileVisible, savedBaseline]
+      profileVisible !== savedBaseline.profileVisible ||
+      (isFounderRole && !sameStringArray(interestSectors, savedBaseline.interestSectors)),
+    [fullName, location, bio, profileVisible, isFounderRole, interestSectors, savedBaseline]
   );
 
   const saveDisabled = saveState === "saving" || !hasUnsavedProfileChanges;
@@ -551,6 +585,41 @@ export function SettingsPageClient({
                   {bio.length}/{PROFILE_BIO_MAX_LENGTH}
                 </p>
               </div>
+
+              {isFounderRole && (
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    Sectors you care about
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    We use this to recommend mentors who match your interests (along with sectors from your
+                    projects).
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {
+                      const active = interestSectors.includes(sector);
+                      return (
+                        <button
+                          key={sector}
+                          type="button"
+                          onClick={() =>
+                            setInterestSectors((prev) =>
+                              prev.includes(sector) ? prev.filter((s) => s !== sector) : [...prev, sector]
+                            )
+                          }
+                          className={`rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[40px] touch-manipulation ${
+                            active
+                              ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {sector}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

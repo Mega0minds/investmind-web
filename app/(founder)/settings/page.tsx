@@ -19,7 +19,9 @@ export default async function SettingsPage() {
 
   const profileResult = await supabase
     .from("profiles")
-    .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role")
+    .select(
+      "full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors"
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -38,6 +40,7 @@ export default async function SettingsPage() {
           bio: "" as string | null,
           profile_visible: true as boolean | null,
           role: null as string | null,
+          interest_sectors: [] as string[],
         }
       : null;
   } else if (profileResult.error) {
@@ -62,6 +65,15 @@ export default async function SettingsPage() {
         initialLocation={resolved.location}
         initialBio={resolved.bio}
         initialAvatarUrl={resolved.avatarUrl}
+        initialInterestSectors={
+          profile &&
+          Array.isArray((profile as { interest_sectors?: unknown }).interest_sectors)
+            ? (profile as { interest_sectors: string[] }).interest_sectors.filter(
+                (x): x is string => typeof x === "string" && x.trim().length > 0
+              )
+            : []
+        }
+        profileRole={profile?.role ?? null}
         email={user.email ?? ""}
         eliteReach={{
           role: eliteRole,

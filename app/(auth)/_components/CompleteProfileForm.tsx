@@ -15,6 +15,7 @@ import {
   getStatesForCountry,
 } from "@/lib/africa-locations";
 import { createClient } from "@/lib/supabase/client";
+import { safeGetSession, safeGetUser } from "@/lib/supabase/safe-auth";
 
 const ROLE_OPTIONS = [
   { value: ROLES.FOUNDER, label: "Founder / Innovator" },
@@ -95,9 +96,7 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
   useEffect(() => {
     const supabase = createClient();
     (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await safeGetSession<{ user?: { id: string } }>(supabase);
       if (!session?.user) {
         setChecking(false);
         router.replace("/login");
@@ -212,9 +211,7 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
 
     setLoading(true);
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await safeGetUser<{ id: string; email?: string }>(supabase);
     if (!user) {
       setError("Session expired. Please sign in again.");
       setLoading(false);

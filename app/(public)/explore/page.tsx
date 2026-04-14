@@ -1,8 +1,18 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { ExploreIdeasContent } from "@/components/explore/ExploreIdeasContent";
+import { createClient } from "@/lib/supabase/server";
+import { fetchExploreProjects } from "@/lib/explore-projects";
 
-export default function PublicExplorePage() {
+export default async function PublicExplorePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const projects = await fetchExploreProjects(supabase, {
+    excludeCreatorId: user?.id ?? undefined,
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col min-w-0">
       <Header />
@@ -13,7 +23,7 @@ export default function PublicExplorePage() {
             Discover innovations from founders across Africa. Sign up to connect and invest.
           </p>
         </div>
-        <ExploreIdeasContent />
+        <ExploreIdeasContent projects={projects} />
       </main>
       <Footer />
     </div>

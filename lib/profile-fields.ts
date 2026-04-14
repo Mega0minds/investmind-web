@@ -8,6 +8,7 @@ export type ProfileRowForSettings = {
   location?: string | null;
   bio?: string | null;
   profile_visible?: boolean | null;
+  interest_sectors?: string[] | null;
 };
 
 function metaString(meta: Record<string, unknown>, key: string): string {
