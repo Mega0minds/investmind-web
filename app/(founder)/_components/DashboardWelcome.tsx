@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { safeGetSession, safeGetUser } from "@/lib/supabase/safe-auth";
+import { safeGetUser } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
 import {
@@ -15,22 +15,20 @@ import {
   mentorOverlapScore,
   type MentorProfileRow,
 } from "@/lib/mentor-matching";
-import { rolesForAudienceFilter } from "@/lib/roles";
+import { normalizeRole, rolesForAudienceFilter } from "@/lib/roles";
 
-const STATS: Array<{
+type StatCard = {
   label: string;
   value: string;
   icon: "bulb" | "doc" | "chat";
   color: "blue" | "purple" | "gray";
   tag?: string;
-}> = [
-  { label: "Ideas Submitted", value: "08", icon: "bulb", color: "blue" },
-  { label: "Investor Requests", value: "24", icon: "doc", color: "purple" },
-  { label: "Mentor Connections", value: "15", icon: "chat", color: "purple" },
-];
+};
 
 const DASHBOARD_PROJECT_LIMIT = 2;
 const DASHBOARD_EXPLORE_LIMIT = 6;
+const DASHBOARD_MENTOR_LIMIT = 4;
+const DASHBOARD_CACHE_TTL_MS = 30_000;
 
 type DashboardProjectRow = {
   id: string;
@@ -52,10 +50,6 @@ type DashboardExploreIdeaRow = {
   updated_at: string | null;
 };
 
-const RECENT_REQUESTS = [
-  { from: "Marcus Sterling", org: "Sterling Ventures", message: "We are impressed by SolarGrid Connect's traction. Let's discuss a Seed A round.", time: "2h ago" },
-];
-
 type RecommendedMentor = {
   id: string;
   name: string;
@@ -63,239 +57,427 @@ type RecommendedMentor = {
   initials: string;
 };
 
+type DashboardCachedPayload = {
+  firstName: string;
+  statCards: StatCard[];
+  dashboardProjects: DashboardProjectRow[];
+  mentors: RecommendedMentor[];
+  mentorsHint: string | null;
+  requestedMentorIds: string[];
+  exploreIdeas: DashboardExploreIdeaRow[];
+  exploreHint: string | null;
+};
+
+const dashboardCache = new Map<string, { expiresAt: number; payload: DashboardCachedPayload }>();
+
 export function DashboardWelcome() {
   const [firstName, setFirstName] = useState<string>("there");
+  const [statCards, setStatCards] = useState<StatCard[]>([
+    { label: "Ideas Submitted", value: "0", icon: "bulb", color: "blue" },
+    { label: "Mentor Requests", value: "0", icon: "doc", color: "purple" },
+    { label: "Mentor Connections", value: "0", icon: "chat", color: "purple" },
+  ]);
   const [dashboardProjects, setDashboardProjects] = useState<DashboardProjectRow[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [mentors, setMentors] = useState<RecommendedMentor[]>([]);
   const [mentorsLoading, setMentorsLoading] = useState(true);
   const [mentorsHint, setMentorsHint] = useState<string | null>(null);
+  const [requestedMentorIds, setRequestedMentorIds] = useState<string[]>([]);
   const [exploreIdeas, setExploreIdeas] = useState<DashboardExploreIdeaRow[]>([]);
   const [exploreLoading, setExploreLoading] = useState(true);
   const [exploreHint, setExploreHint] = useState<string | null>(null);
+  const [selectedMentor, setSelectedMentor] = useState<RecommendedMentor | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestingMentorId, setRequestingMentorId] = useState<string | null>(null);
+
+  const requestedMentorSet = useMemo(() => new Set(requestedMentorIds), [requestedMentorIds]);
 
   useEffect(() => {
-    const supabase = createClient();
-    safeGetSession<{ user?: { id: string } }>(supabase).then((session) => {
-      if (session?.user) {
+    let cancelled = false;
+
+    function applyPayload(payload: DashboardCachedPayload) {
+      setFirstName(payload.firstName || "there");
+      setStatCards(
+        payload.statCards.map((card) => ({
+          ...card,
+          label: card.label.replace("Mentot", "Mentor"),
+        }))
+      );
+      setDashboardProjects(payload.dashboardProjects);
+      setMentors(payload.mentors);
+      setMentorsHint(payload.mentorsHint);
+      setRequestedMentorIds(payload.requestedMentorIds);
+      setExploreIdeas(payload.exploreIdeas);
+      setExploreHint(payload.exploreHint);
+      setProjectsLoading(false);
+      setMentorsLoading(false);
+      setExploreLoading(false);
+    }
+
+    (async () => {
+      const supabase = createClient();
+      const user = await safeGetUser<{ id: string }>(supabase);
+      if (!user) {
+        if (!cancelled) {
+          setProjectsLoading(false);
+          setMentorsLoading(false);
+          setExploreLoading(false);
+        }
+        return;
+      }
+
+      const cached = dashboardCache.get(user.id);
+      const now = Date.now();
+      if (cached && cached.expiresAt > now && !cancelled) {
+        applyPayload(cached.payload);
+      }
+
+      const [
+        profileRes,
+        ideasCountRes,
+        projectCardsRes,
+        projectCategoriesRes,
+        mentorRowsRes,
+        mentorshipRequestsRes,
+        exploreProjectsRes,
+      ] = await Promise.all([
         supabase
           .from("profiles")
-          .select("first_name")
-          .eq("id", session.user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data?.first_name) setFirstName(data.first_name);
+          .select("first_name, role, interest_sectors")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("projects")
+          .select("id", { count: "exact", head: true })
+          .eq("creator_id", user.id)
+          .eq("status", "published"),
+        supabase
+          .from("projects")
+          .select("id, status, project_name, tagline, short_description, cover_image_file_name")
+          .eq("creator_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(DASHBOARD_PROJECT_LIMIT),
+        supabase
+          .from("projects")
+          .select("sector, subcategory")
+          .eq("creator_id", user.id),
+        supabase
+          .from("profiles")
+          .select("id, first_name, last_name, full_name, mentor_expertise")
+          .in("role", rolesForAudienceFilter("investor"))
+          .eq("profile_visible", true)
+          .neq("id", user.id)
+          .limit(40),
+        supabase
+          .from("mentorship_requests")
+          .select("mentor_id")
+          .eq("requester_id", user.id)
+          .in("status", ["pending", "accepted"]),
+        supabase
+          .from("projects")
+          .select(
+            "id, project_name, tagline, short_description, sector, subcategory, cover_image_file_name, updated_at"
+          )
+          .eq("status", "published")
+          .neq("creator_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(60),
+      ]);
+
+      const profile = profileRes.data as
+        | { first_name?: string | null; role?: string | null; interest_sectors?: unknown }
+        | null;
+      const first = profile?.first_name?.trim() || "there";
+      const normalized = normalizeRole(profile?.role ?? null);
+      const isFounderLike = normalized === "founder";
+
+      const statsRequestsRes = isFounderLike
+        ? await supabase
+            .from("mentorship_requests")
+            .select("mentor_id, status")
+            .eq("requester_id", user.id)
+            .in("status", ["pending", "accepted"])
+        : await supabase
+            .from("mentorship_requests")
+            .select("requester_id, status")
+            .eq("mentor_id", user.id)
+            .in("status", ["pending", "accepted"]);
+
+      const statsRows = Array.isArray(statsRequestsRes.data) ? statsRequestsRes.data : [];
+      const requestCount = statsRows.length;
+      const connectionCount = new Set(
+        statsRows
+          .filter((row) => (row as { status?: string | null }).status === "accepted")
+          .map((row) =>
+            isFounderLike
+              ? (row as { mentor_id?: string | null }).mentor_id ?? null
+              : (row as { requester_id?: string | null }).requester_id ?? null
+          )
+          .filter((id): id is string => Boolean(id))
+      ).size;
+      const ideasCount = ideasCountRes.count ?? 0;
+
+      const stats: StatCard[] = isFounderLike
+        ? [
+            {
+              label: "Ideas Submitted",
+              value: String(ideasCount).padStart(2, "0"),
+              icon: "bulb",
+              color: "blue",
+            },
+            {
+              label: "Mentor Requests",
+              value: String(requestCount),
+              icon: "doc",
+              color: "purple",
+            },
+            {
+              label: "Mentor Connections",
+              value: String(connectionCount),
+              icon: "chat",
+              color: "purple",
+            },
+          ]
+        : [
+            {
+              label: "Creative Requests",
+              value: String(requestCount),
+              icon: "doc",
+              color: "purple",
+            },
+            {
+              label: "Creative Connections",
+              value: String(connectionCount),
+              icon: "chat",
+              color: "purple",
+            },
+          ];
+
+      const dashboardProjects = Array.isArray(projectCardsRes.data)
+        ? (projectCardsRes.data as DashboardProjectRow[])
+        : [];
+
+      const interestSectorsSource = Array.isArray(profile?.interest_sectors)
+        ? (profile?.interest_sectors ?? [])
+        : [];
+      const interestRaw =
+        profileRes.error
+          ? []
+          : interestSectorsSource.filter(
+              (x): x is string => typeof x === "string" && x.trim().length > 0
+            );
+      const myProjectCategories = projectCategoriesRes.error ? [] : (projectCategoriesRes.data ?? []);
+      const founderKeys = founderCategoryKeys(interestRaw, myProjectCategories);
+      const requestedMentorIds = mentorshipRequestsRes.error
+        ? []
+        : Array.isArray(mentorshipRequestsRes.data)
+          ? mentorshipRequestsRes.data
+              .map((row) =>
+                typeof (row as { mentor_id?: unknown }).mentor_id === "string"
+                  ? (row as { mentor_id: string }).mentor_id
+                  : null
+              )
+              .filter((id): id is string => Boolean(id))
+          : [];
+      const requestedMentorIdSet = new Set(requestedMentorIds);
+
+      let mentors: RecommendedMentor[] = [];
+      let mentorsHint: string | null = null;
+      if (mentorRowsRes.error || !mentorRowsRes.data?.length) {
+        mentors = [];
+        mentorsHint = mentorRowsRes.error
+          ? null
+          : "No mentor profiles yet. Mentors appear here when they join with matching expertise.";
+      } else {
+        const rows = mentorRowsRes.data as MentorProfileRow[];
+        const scored = rows
+          .map((m) => ({ m, score: mentorOverlapScore(m.mentor_expertise, founderKeys) }))
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score);
+        let list = scored;
+        if (!list.length && founderKeys.length && rows.length) {
+          mentorsHint = "No mentors listed in your sectors yet. Try more interests in Settings.";
+          list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
+        } else if (!list.length && !founderKeys.length && rows.length) {
+          mentorsHint =
+            "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories.";
+          list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
+        }
+        mentors = list
+          .filter(({ m }) => !requestedMentorIdSet.has(m.id))
+          .slice(0, DASHBOARD_MENTOR_LIMIT)
+          .map(({ m }) => {
+            const name = mentorDisplayName(m);
+            return {
+              id: m.id,
+              name,
+              role: mentorExpertiseLabel(m, founderKeys),
+              initials: initialsFromMentorName(name),
+            };
           });
       }
-    });
-  }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supabase = createClient();
-      const user = await safeGetUser<{ id: string }>(supabase);
-      if (!user) {
-        setProjectsLoading(false);
-        return;
-      }
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, status, project_name, tagline, short_description, cover_image_file_name")
-        .eq("creator_id", user.id)
-        .order("updated_at", { ascending: false })
-        .limit(DASHBOARD_PROJECT_LIMIT);
-      if (!cancelled) {
-        setProjectsLoading(false);
-        if (!error && Array.isArray(data)) {
-          setDashboardProjects(data as DashboardProjectRow[]);
-        } else {
-          setDashboardProjects([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supabase = createClient();
-      const user = await safeGetUser<{ id: string }>(supabase);
-      if (!user) {
-        setMentorsLoading(false);
-        return;
-      }
-
-      const profileRes = await supabase
-        .from("profiles")
-        .select("interest_sectors")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const interestRaw =
-        profileRes.error ||
-        !Array.isArray((profileRes.data as { interest_sectors?: unknown } | null)?.interest_sectors)
-          ? []
-          : ((profileRes.data as { interest_sectors: string[] }).interest_sectors ?? []).filter(
-              (x): x is string => typeof x === "string" && x.trim().length > 0
-            );
-
-      const projectRes = await supabase
-        .from("projects")
-        .select("sector, subcategory")
-        .eq("creator_id", user.id);
-
-      const projectRows = projectRes.error ? [] : (projectRes.data ?? []);
-      const founderKeys = founderCategoryKeys(interestRaw, projectRows);
-
-      const { data: mentorRows, error } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name, full_name, mentor_expertise")
-        .in("role", rolesForAudienceFilter("investor"))
-        .eq("profile_visible", true)
-        .neq("id", user.id)
-        .limit(40);
-
-      if (cancelled) return;
-      setMentorsLoading(false);
-
-      if (error || !mentorRows?.length) {
-        setMentors([]);
-        setMentorsHint(
-          error
-            ? null
-            : "No mentor profiles yet. Mentors appear here when they join with matching expertise."
-        );
-        return;
-      }
-
-      const rows = mentorRows as MentorProfileRow[];
-      const scored = rows
-        .map((m) => ({ m, score: mentorOverlapScore(m.mentor_expertise, founderKeys) }))
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score);
-
-      let list = scored;
-      if (!list.length && founderKeys.length && rows.length) {
-        setMentorsHint("No mentors listed in your sectors yet. Try more interests in Settings.");
-        list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
-      } else if (!list.length && !founderKeys.length && rows.length) {
-        setMentorsHint(
-          "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories."
-        );
-        list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
-      } else {
-        setMentorsHint(null);
-      }
-
-      const cards: RecommendedMentor[] = list.slice(0, 8).map(({ m }) => {
-        const name = mentorDisplayName(m);
-        return {
-          id: m.id,
-          name,
-          role: mentorExpertiseLabel(m, founderKeys),
-          initials: initialsFromMentorName(name),
-        };
-      });
-      setMentors(cards);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supabase = createClient();
-      const user = await safeGetUser<{ id: string }>(supabase);
-      if (!user) {
-        setExploreLoading(false);
-        return;
-      }
-
-      const profileRes = await supabase
-        .from("profiles")
-        .select("interest_sectors")
-        .eq("id", user.id)
-        .maybeSingle();
-      const interestRaw =
-        profileRes.error ||
-        !Array.isArray((profileRes.data as { interest_sectors?: unknown } | null)?.interest_sectors)
-          ? []
-          : ((profileRes.data as { interest_sectors: string[] }).interest_sectors ?? []).filter(
-              (x): x is string => typeof x === "string" && x.trim().length > 0
-            );
-
-      const myProjectsRes = await supabase
-        .from("projects")
-        .select("sector, subcategory")
-        .eq("creator_id", user.id);
-      const myProjects = myProjectsRes.error ? [] : (myProjectsRes.data ?? []);
-      const founderKeys = founderCategoryKeys(interestRaw, myProjects);
+      let exploreIdeas: DashboardExploreIdeaRow[] = [];
+      let exploreHint: string | null = null;
       const founderKeySet = new Set(founderKeys.map((x) => x.toLowerCase()));
+      const allExploreRows = exploreProjectsRes.error ? [] : ((exploreProjectsRes.data ?? []) as DashboardExploreIdeaRow[]);
 
       if (!founderKeySet.size) {
-        if (!cancelled) {
-          setExploreLoading(false);
-          setExploreIdeas([]);
-          setExploreHint("Add sectors in Settings or create a project so we can match ideas for you.");
+        exploreIdeas = [];
+        exploreHint = "Add sectors in Settings or create a project so we can match ideas for you.";
+      } else if (!allExploreRows.length) {
+        exploreIdeas = [];
+        exploreHint = "No matching published ideas yet.";
+      } else {
+        const scored = allExploreRows
+          .map((idea) => {
+            const keys = [idea.sector, idea.subcategory]
+              .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+              .map((v) => v.trim().toLowerCase());
+            const score = keys.reduce((acc, k) => acc + (founderKeySet.has(k) ? 1 : 0), 0);
+            return { idea, score };
+          })
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score);
+        const top = scored.slice(0, DASHBOARD_EXPLORE_LIMIT).map((x) => x.idea);
+        if (top.length) {
+          exploreIdeas = top;
+          exploreHint = null;
+        } else {
+          const fallbackIdeas = allExploreRows.slice(0, DASHBOARD_EXPLORE_LIMIT);
+          exploreIdeas = fallbackIdeas;
+          exploreHint = fallbackIdeas.length
+            ? "No matching published ideas yet. Showing recent ideas for now."
+            : "No matching published ideas yet.";
         }
-        return;
       }
 
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, project_name, tagline, short_description, sector, subcategory, cover_image_file_name, updated_at")
-        .eq("status", "published")
-        .neq("creator_id", user.id)
-        .order("updated_at", { ascending: false })
-        .limit(60);
+      const payload: DashboardCachedPayload = {
+        firstName: first,
+        statCards: stats,
+        dashboardProjects,
+        mentors,
+        mentorsHint,
+        requestedMentorIds,
+        exploreIdeas,
+        exploreHint,
+      };
+      dashboardCache.set(user.id, {
+        payload,
+        expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      });
 
-      if (cancelled) return;
-      setExploreLoading(false);
-      if (error || !Array.isArray(data) || data.length === 0) {
-        setExploreIdeas([]);
-        setExploreHint("No matching published ideas yet.");
-        return;
+      if (!cancelled) {
+        applyPayload(payload);
       }
-
-      const scored = (data as DashboardExploreIdeaRow[])
-        .map((idea) => {
-          const keys = [idea.sector, idea.subcategory]
-            .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-            .map((v) => v.trim().toLowerCase());
-          const score = keys.reduce((acc, k) => acc + (founderKeySet.has(k) ? 1 : 0), 0);
-          return { idea, score };
-        })
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score);
-
-      const top = scored.slice(0, DASHBOARD_EXPLORE_LIMIT).map((x) => x.idea);
-      if (top.length) {
-        setExploreIdeas(top);
-        setExploreHint(null);
-        return;
-      }
-
-      // If no sector match yet, show latest published ideas as a temporary fallback.
-      const fallbackIdeas = (data as DashboardExploreIdeaRow[]).slice(0, DASHBOARD_EXPLORE_LIMIT);
-      if (fallbackIdeas.length) {
-        setExploreIdeas(fallbackIdeas);
-        setExploreHint("No matching published ideas yet. Showing recent ideas for now.");
-        return;
-      }
-
-      setExploreIdeas([]);
-      setExploreHint("No matching published ideas yet.");
     })();
+
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function submitMentorshipRequest() {
+    if (!selectedMentor || requestingMentorId) return;
+
+    const trimmed = requestMessage.trim();
+    if (trimmed.length < 5 || trimmed.length > 300) {
+      setRequestError("Message must be between 5 and 300 characters.");
+      return;
+    }
+
+    setRequestError(null);
+    setRequestingMentorId(selectedMentor.id);
+    try {
+      const res = await fetch("/api/access-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mentorId: selectedMentor.id,
+          message: trimmed,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || "Could not send mentorship request.");
+      }
+
+      setRequestedMentorIds((prev) =>
+        prev.includes(selectedMentor.id) ? prev : [...prev, selectedMentor.id]
+      );
+      setSelectedMentor(null);
+      setRequestMessage("");
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Could not send mentorship request.");
+    } finally {
+      setRequestingMentorId(null);
+    }
+  }
+
+  const mentorsSection = (
+    <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
+      <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Recommended Mentors</h3>
+        <Link
+          href="/mentorship"
+          className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+          style={{ color: THEME.primary }}
+        >
+          See all
+        </Link>
+      </div>
+      {mentorsHint && <p className="text-xs text-gray-500 mb-3 wrap-break-word">{mentorsHint}</p>}
+      {mentorsLoading ? (
+        <p className="text-sm text-gray-500">Loading mentors…</p>
+      ) : mentors.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No matches yet. Add sectors in Settings or publish a project to see mentors in your space.
+        </p>
+      ) : (
+        <ul className="space-y-3 sm:space-y-4">
+          {mentors.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+              <Link
+                href={`/mentorship?mentor=${encodeURIComponent(m.id)}`}
+                className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3"
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center text-xs sm:text-sm font-semibold text-purple-700 shrink-0">
+                  {m.initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{m.name}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 truncate">{m.role}</p>
+                </div>
+              </Link>
+              {requestedMentorSet.has(m.id) ? (
+                <span
+                  className="rounded-full bg-purple-50 px-3 py-1 text-xs sm:text-sm font-medium shrink-0"
+                  style={{ color: THEME.primary }}
+                >
+                  Requested
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMentor(m);
+                    setRequestMessage(`Hi ${m.name}, I would love to learn from your experience.`);
+                    setRequestError(null);
+                  }}
+                  className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                  style={{ color: THEME.primary }}
+                >
+                  Request Mentorship
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 
   return (
     <div className="space-y-6 sm:space-y-8 w-full min-w-0 max-w-full">
@@ -339,8 +521,12 @@ export function DashboardWelcome() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3">
-        {STATS.map((stat) => (
+      <div
+        className={`grid gap-2 sm:gap-3 ${
+          statCards.length >= 3 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"
+        }`}
+      >
+        {statCards.map((stat) => (
           <div
             key={stat.label}
             className="relative rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm transition hover:shadow-md min-w-0"
@@ -389,7 +575,7 @@ export function DashboardWelcome() {
 
       {/* Main grid: Projects + Requests | Mentors */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 min-w-0">
-        {/* Left: My Projects + Recent Investor Requests */}
+        {/* Left: My Projects + Recent Requests */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
           <section className="min-w-0">
             <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
@@ -498,6 +684,8 @@ export function DashboardWelcome() {
             </div>
           </section>
 
+          <div className="lg:hidden">{mentorsSection}</div>
+
           <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
             <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Explore Ideas</h3>
@@ -565,87 +753,73 @@ export function DashboardWelcome() {
             )}
           </section>
 
-          <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">Recent Investor Requests</h3>
-              <Link
-                href="/community"
-                className="text-xs sm:text-sm font-medium hover:underline shrink-0"
-                style={{ color: THEME.primary }}
-              >
-                Manage All
-              </Link>
-            </div>
-            <ul className="space-y-3 sm:space-y-4">
-              {RECENT_REQUESTS.map((req) => (
-                <li key={req.from} className="flex gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100 last:border-0 last:pb-0 min-w-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-100 flex items-center justify-center text-xs sm:text-sm font-semibold text-indigo-700 shrink-0">
-                    {req.from.split(" ").map((n) => n[0]).join("")}
-                  </div>
-                  <div className="flex-1 min-w-0 overflow-hidden">
-                    <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{req.from} from {req.org}</p>
-                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5 line-clamp-2">&ldquo;{req.message}&rdquo;</p>
-                    <p className="text-xs text-gray-400 mt-1">{req.time}</p>
-                    <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
-                      <button
-                        type="button"
-                        className="rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
-                        style={{ backgroundColor: THEME.primary }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-gray-200 bg-white px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
         </div>
 
         {/* Right: Recommended Mentors */}
-        <div className="space-y-4 sm:space-y-6 min-w-0">
-          <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Recommended Mentors</h3>
-            {mentorsHint && (
-              <p className="text-xs text-gray-500 mb-3 wrap-break-word">{mentorsHint}</p>
-            )}
-            {mentorsLoading ? (
-              <p className="text-sm text-gray-500">Loading mentors…</p>
-            ) : mentors.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No matches yet. Add sectors in Settings or publish a project to see mentors in your space.
-              </p>
-            ) : (
-              <ul className="space-y-3 sm:space-y-4">
-                {mentors.map((m) => (
-                  <li key={m.id} className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 flex items-center justify-center text-xs sm:text-sm font-semibold text-purple-700 shrink-0">
-                      {m.initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{m.name}</p>
-                      <p className="text-xs sm:text-sm text-gray-500 truncate">{m.role}</p>
-                    </div>
-                    <Link
-                      href={`/mentorship?mentor=${encodeURIComponent(m.id)}`}
-                      className="text-xs sm:text-sm font-medium hover:underline shrink-0"
-                      style={{ color: THEME.primary }}
-                    >
-                      Request Mentorship
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        <div className="hidden lg:block space-y-4 sm:space-y-6 min-w-0">{mentorsSection}</div>
       </div>
+      {selectedMentor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Request Mentorship</h3>
+                <p className="mt-1 text-sm text-gray-500">Send a short note to {selectedMentor.name}.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requestingMentorId) {
+                    setSelectedMentor(null);
+                    setRequestError(null);
+                  }
+                }}
+                className="text-sm text-gray-400 hover:text-gray-600"
+              >
+                Close
+              </button>
+            </div>
+            <label className="mt-4 block text-sm font-medium text-gray-700" htmlFor="mentorship-message">
+              Message
+            </label>
+            <textarea
+              id="mentorship-message"
+              value={requestMessage}
+              onChange={(e) => setRequestMessage(e.target.value.slice(0, 300))}
+              rows={5}
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              placeholder="Write a short message..."
+            />
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+              <span>{requestError ? <span className="text-red-600">{requestError}</span> : "Keep it short and clear."}</span>
+              <span>{requestMessage.trim().length}/300</span>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requestingMentorId) {
+                    setSelectedMentor(null);
+                    setRequestError(null);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitMentorshipRequest()}
+                disabled={requestingMentorId === selectedMentor.id}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                {requestingMentorId === selectedMentor.id ? "Sending..." : "Send request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

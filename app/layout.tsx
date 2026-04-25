@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "InvestMind | Discover Africa's Next Big Ideas",
   description:
-    "Connect youth innovators across Africa with investors, mentors, and a supportive community. Get your ideas seen, funded, guided, and grown.",
+    "Connect youth creatives across Africa with mentors and a supportive community. Get your ideas seen, funded, guided, and grown.",
 };
 
 export default function RootLayout({

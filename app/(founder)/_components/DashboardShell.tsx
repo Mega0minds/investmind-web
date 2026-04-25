@@ -14,9 +14,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "grid" },
   { href: "/explore-ideas", label: "Explore Ideas", icon: "eye" },
   { href: "/listings", label: "My Projects", icon: "folder" },
-  { href: "/mentorship", label: "Mentorship Hub", icon: "cap" },
   { href: "/community", label: "Community", icon: "community" },
-  { href: "/notifications", label: "Notifications", icon: "bell" },
   { href: "/settings", label: "Settings", icon: "gear" },
 ] as const;
 
@@ -280,7 +278,7 @@ export function DashboardShell({
               <input
                 type="search"
                 placeholder="Search..."
-                title="Search for investors, mentors or ideas"
+                title="Search for mentors, creatives or ideas"
                 className="w-full min-w-0 rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 py-2 sm:py-2.5 pl-8 sm:pl-10 pr-3 text-xs sm:text-sm placeholder-gray-400 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none transition"
               />
             </label>

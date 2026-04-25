@@ -2,6 +2,8 @@ import { processLock } from "@supabase/auth-js";
 import { createBrowserClient } from "@supabase/ssr";
 import { getPublicSupabaseConfig } from "./public-env";
 
+const nonBlockingLock: typeof processLock = async (_name, _acquireTimeout, fn) => fn();
+
 /**
  * Creates the Supabase browser client.
  * @param rememberMe - If false, session cookie is used (log out when browser closes). If true or omitted, long-lived cookie (default).
@@ -13,9 +15,9 @@ export function createClient(rememberMe: boolean = true) {
   return createBrowserClient(url, anonKey, {
     isSingleton: true,
     auth: {
-      // Default navigatorLock + steal recovery throws AbortError under Strict Mode / HMR.
-      // In-process lock is enough for a single tab; cross-tab sync is cookie-based.
-      lock: processLock,
+      // Avoid lock acquisition timeouts under heavy client-side mount bursts.
+      // We keep singleton client usage and let auth ops run without waiting.
+      lock: nonBlockingLock,
     },
     ...(rememberMe ? {} : { cookieOptions: { maxAge: undefined } }),
   });

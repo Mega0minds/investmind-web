@@ -541,7 +541,7 @@ export function UploadProjectWizard() {
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-bold text-gray-900">Upload Your Project</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Project uploads are available for founders only. Please switch to a founder profile
+          Project uploads are available for creatives only. Please switch to a creative profile
           to continue.
         </p>
       </div>
@@ -558,7 +558,7 @@ export function UploadProjectWizard() {
             {isEditMode ? "Edit Your Project" : "Upload Your Project"}
           </h1>
           <p className="text-sm text-gray-500 mt-2">
-            Share your idea with investors and mentors. Add details so they can understand your vision.
+            Share your idea with mentors and other creatives. Add details so they can understand your vision.
           </p>
         </div>
         {isEditMode && (

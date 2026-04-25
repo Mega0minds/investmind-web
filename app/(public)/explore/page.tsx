@@ -2,7 +2,9 @@ import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { ExploreIdeasContent } from "@/components/explore/ExploreIdeasContent";
 import { createClient } from "@/lib/supabase/server";
-import { fetchExploreProjects } from "@/lib/explore-projects";
+import { fetchExploreProjects, fetchTrendingProjectsByViews } from "@/lib/explore-projects";
+
+export const revalidate = 60;
 
 export default async function PublicExplorePage() {
   const supabase = await createClient();
@@ -12,6 +14,10 @@ export default async function PublicExplorePage() {
   const projects = await fetchExploreProjects(supabase, {
     excludeCreatorId: user?.id ?? undefined,
   });
+  const trending = await fetchTrendingProjectsByViews(supabase, {
+    excludeCreatorId: user?.id ?? undefined,
+    limit: 3,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col min-w-0">
@@ -20,10 +26,10 @@ export default async function PublicExplorePage() {
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Explore ideas</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Discover innovations from founders across Africa. Sign up to connect and invest.
+            Discover innovations from creatives across Africa. Sign up to connect and invest.
           </p>
         </div>
-        <ExploreIdeasContent projects={projects} />
+        <ExploreIdeasContent projects={projects} trending={trending} />
       </main>
       <Footer />
     </div>

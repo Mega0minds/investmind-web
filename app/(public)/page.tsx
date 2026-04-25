@@ -1,8 +1,94 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { FaqAccordion } from "@/components/public/FaqAccordion";
+import { createClient } from "@/lib/supabase/server";
+import { fetchExploreProjects, type ExplorePublishedProject } from "@/lib/explore-projects";
+import { projectMediaPublicUrl } from "@/lib/project-media-url";
+import Image from "next/image";
 
-export default function Landing() {
+export const revalidate = 60;
+
+type LandingCard = {
+  id: string;
+  name: string;
+  role: string;
+  bg: string;
+  tilt: number;
+  coverUrl: string | null;
+  href: string;
+};
+
+const FALLBACK_LANDING_CARDS: LandingCard[] = [
+  { id: "fallback-solar-hub", name: "Solar Hub", role: "Clean energy for off-grid communities", bg: "#22c55e", tilt: -1.5, coverUrl: null, href: "/explore" },
+  { id: "fallback-farmlink", name: "FarmLink", role: "Connecting smallholder farmers to markets", bg: "#f97316", tilt: 1, coverUrl: null, href: "/explore" },
+  { id: "fallback-edutrack", name: "EduTrack", role: "Learning management for schools", bg: "#84cc16", tilt: -1, coverUrl: null, href: "/explore" },
+  { id: "fallback-healthbridge", name: "HealthBridge", role: "Telehealth for rural clinics", bg: "#16a34a", tilt: 1.5, coverUrl: null, href: "/explore" },
+  { id: "fallback-paynaija", name: "PayNaija", role: "Mobile payments for informal traders", bg: "#334155", tilt: -1, coverUrl: null, href: "/explore" },
+];
+
+const CARD_BGS = ["#22c55e", "#f97316", "#84cc16", "#16a34a", "#334155"] as const;
+const CARD_TILTS = [-1.5, 1, -1, 1.5, -0.8, 0.8] as const;
+const LANDING_IDEAS_TTL_MS = 60_000;
+let landingIdeasCache: { cards: LandingCard[]; expiresAt: number } | null = null;
+
+function truncateWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function toLandingCards(projects: ExplorePublishedProject[], hasSession: boolean): LandingCard[] {
+  const pool = shuffle(projects).slice(0, 5);
+  if (!pool.length) return FALLBACK_LANDING_CARDS;
+  return pool.map((p, idx) => ({
+    id: p.id,
+    name: p.project_name?.trim() || "Untitled project",
+    role: truncateWords(
+      p.short_description?.trim() || p.tagline?.trim() || "Innovative idea shaping Africa's future",
+      8
+    ),
+    bg: CARD_BGS[idx % CARD_BGS.length],
+    tilt: CARD_TILTS[idx % CARD_TILTS.length],
+    coverUrl: projectMediaPublicUrl(p.cover_image_file_name),
+    href: hasSession ? `/listings/manage/${p.id}` : "/login",
+  }));
+}
+
+async function getLandingCardsCached(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  hasSession: boolean
+): Promise<LandingCard[]> {
+  const now = Date.now();
+  if (hasSession && landingIdeasCache && landingIdeasCache.expiresAt > now) {
+    return landingIdeasCache.cards;
+  }
+  const publishedIdeas = await fetchExploreProjects(supabase, { excludeCreatorId: null });
+  const cards = toLandingCards(publishedIdeas, hasSession);
+  if (hasSession) {
+    landingIdeasCache = { cards, expiresAt: now + LANDING_IDEAS_TTL_MS };
+  }
+  return cards;
+}
+
+export default async function Landing() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const landingCards = await getLandingCardsCached(supabase, Boolean(user));
+  const learnMoreHref = user ? "/dashboard" : "/login";
+
   return (
     <div className="min-w-0 overflow-x-hidden">
       {/* First section: Hero */}
@@ -38,7 +124,7 @@ export default function Landing() {
             >
               Across Africa, brilliant ideas struggle without exposure or
               mentorship. InvestMind bridges that gap by connecting young
-              innovators and inventors with investors, mentors, and a supportive community.
+              creatives and inventors with mentors and a supportive community.
             </p>
           </div>
         </section>
@@ -133,16 +219,13 @@ export default function Landing() {
           {/* Auto-scrolling circus-style card row (no scrollbar, infinite loop) */}
           <div className="card-row-wrap overflow-hidden -mx-4 sm:-mx-6 md:mx-0 py-2">
             <div className="card-track flex gap-4 sm:gap-6 min-w-max w-max">
-              {[
-                { name: "Solar Hub", role: "Clean energy for off-grid communities", bg: "#22c55e", tilt: -1.5 },
-                { name: "FarmLink", role: "Connecting smallholder farmers to markets", bg: "#f97316", tilt: 1 },
-                { name: "EduTrack", role: "Learning management for schools", bg: "#84cc16", tilt: -1 },
-                { name: "HealthBridge", role: "Telehealth for rural clinics", bg: "#16a34a", tilt: 1.5 },
-                { name: "PayNaija", role: "Mobile payments for informal traders", bg: "#334155", tilt: -1 },
-              ].flatMap((card) => [card, { ...card, name: `${card.name}-dup` }]).map((card) => (
+              {(landingCards.length > 1
+                ? landingCards.flatMap((card) => [card, { ...card, id: `${card.id}-dup` }])
+                : landingCards
+              ).map((card) => (
                 <a
-                  key={card.name}
-                  href="/explore"
+                  key={card.id}
+                  href={card.href}
                   className="group shrink-0 w-[240px] sm:w-[260px] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:z-10 touch-manipulation"
                   style={{
                     boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)",
@@ -153,11 +236,22 @@ export default function Landing() {
                     className="relative w-full rounded-2xl flex flex-col min-h-[280px] sm:min-h-[320px]"
                     style={{ backgroundColor: card.bg }}
                   >
+                    {card.coverUrl ? (
+                      <Image
+                        src={card.coverUrl}
+                        alt={card.name}
+                        fill
+                        unoptimized
+                        sizes="(max-width: 640px) 240px, 260px"
+                        className="absolute inset-0 object-cover"
+                      />
+                    ) : null}
+                    {card.coverUrl ? <div className="absolute inset-0 bg-black/30" /> : null}
                     <div className="flex-1 min-h-[140px] sm:min-h-[180px] flex items-center justify-center">
-                      <span className="text-5xl sm:text-6xl text-white/90" aria-hidden>💡</span>
+                      {!card.coverUrl ? <span className="text-5xl sm:text-6xl text-white/90" aria-hidden>💡</span> : null}
                     </div>
-                    <div className="p-4 pt-2 pb-5">
-                      <h3 className="text-base font-bold text-white mb-0.5">{card.name.replace("-dup", "")}</h3>
+                    <div className="relative z-10 p-4 pt-2 pb-5">
+                      <h3 className="text-base font-bold text-white mb-0.5">{card.name}</h3>
                       <p className="text-sm text-white/90">{card.role}</p>
                     </div>
                   </div>
@@ -168,7 +262,7 @@ export default function Landing() {
 
           <div className="text-center mt-6 sm:mt-8 px-2">
             <a
-              href="/explore"
+              href={learnMoreHref}
               className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 sm:px-6 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 min-h-[44px] touch-manipulation"
               style={{ backgroundColor: "#4A4A4A" }}
             >
@@ -204,7 +298,7 @@ export default function Landing() {
             Ready to Turn Your Idea Into Reality?
           </h2>
           <p className="text-white/90 text-sm sm:text-base md:text-lg mb-6 sm:mb-8 px-2">
-            Join InvestMind and connect with investors, mentors, and a community that believes in you.
+            Join InvestMind and connect with mentors, creatives, and a community that believes in you.
           </p>
           <a
             href="/signup"

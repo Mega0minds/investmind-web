@@ -9,18 +9,22 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 
-export function LoginForm() {
+type LoginFormProps = {
+  adminOnly?: boolean;
+};
+
+export function LoginForm({ adminOnly = false }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dismissedEmailSentModal, setDismissedEmailSentModal] = useState(false);
   const showEmailSentModal =
-    searchParams.get("email_sent") === "1" && !dismissedEmailSentModal;
+    !adminOnly && searchParams.get("email_sent") === "1" && !dismissedEmailSentModal;
 
   function closeEmailSentModal() {
     setDismissedEmailSentModal(true);
-    router.replace("/login", { scroll: false });
+    router.replace(adminOnly ? "/admin/login" : "/login", { scroll: false });
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -97,14 +101,41 @@ export function LoginForm() {
     }
     const userId = signInData.user?.id;
     const { data: profile } = userId
-      ? await supabase.from("profiles").select("first_name, last_name, role, age").eq("id", userId).maybeSingle()
+      ? await supabase
+          .from("profiles")
+          .select("first_name, last_name, role, age, admin_approval_status")
+          .eq("id", userId)
+          .maybeSingle()
       : { data: null };
+    const nextRaw = searchParams.get("next");
+    const nextPath = nextRaw && nextRaw.startsWith("/") ? nextRaw : null;
     const hasProfile =
       profile?.first_name && profile?.last_name && profile?.role && profile?.age != null;
+    if (adminOnly) {
+      if (profile?.role !== "admin") {
+        await supabase.auth.signOut();
+        setError("This login is for company admins only.");
+        return;
+      }
+      const approval = profile.admin_approval_status ?? "none";
+      if (approval === "rejected") {
+        await supabase.auth.signOut();
+        setError("Your admin access was not approved.");
+        return;
+      }
+      if (approval !== "approved") {
+        router.push("/admin/pending-approval");
+        router.refresh();
+        return;
+      }
+      router.push(nextPath || "/admin");
+      router.refresh();
+      return;
+    }
     if (!hasProfile) {
       router.push("/signup/complete");
     } else {
-      router.push("/dashboard");
+      router.push(nextPath || "/dashboard");
     }
     router.refresh();
   }
@@ -155,10 +186,12 @@ export function LoginForm() {
     <div className="mx-auto w-full max-w-[380px] relative">
       {emailSentModal}
       <h1 className="text-xl sm:text-2xl font-bold text-[#1a1a1a] mb-0.5">
-        Welcome back
+        {adminOnly ? "Admin sign in" : "Welcome back"}
       </h1>
       <p className="text-sm text-[#6B7280] mb-4 sm:mb-5">
-        Sign in with your email and password.
+        {adminOnly
+          ? "Company administrators only. Sign in with your admin credentials."
+          : "Sign in with your email and password."}
       </p>
       <form
         className="space-y-3 sm:space-y-4"
@@ -212,12 +245,21 @@ export function LoginForm() {
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="mt-4 sm:mt-5 text-sm text-center text-[#6B7280]">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="font-semibold text-[#5A2D8F] hover:underline">
-          Sign up
-        </Link>
-      </p>
+      {!adminOnly ? (
+        <p className="mt-4 sm:mt-5 text-sm text-center text-[#6B7280]">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-semibold text-[#5A2D8F] hover:underline">
+            Sign up
+          </Link>
+        </p>
+      ) : (
+        <p className="mt-4 sm:mt-5 text-sm text-center text-[#6B7280]">
+          Need an admin account?{" "}
+          <Link href="/admin/signup" className="font-semibold text-[#5A2D8F] hover:underline">
+            Request access
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

@@ -1,39 +1,22 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { THEME } from "@/lib/constants";
-import type { ExplorePublishedProject } from "@/lib/explore-projects";
+import type { ExplorePublishedProject, TrendingProject } from "@/lib/explore-projects";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
 
 const CATEGORY_CHIPS = [
-  { label: "All Ideas", href: "#" },
-  { label: "Fintech", href: "#" },
-  { label: "Agrotech", href: "#" },
-  { label: "Healthtech", href: "#" },
-  { label: "Edutech", href: "#" },
-  { label: "Renewable Energy", href: "#" },
+  { key: "all", label: "All Ideas" },
+  { key: "fintech", label: "Fintech" },
+  { key: "agritech", label: "Agrotech" },
+  { key: "healthtech", label: "Healthtech" },
+  { key: "edtech", label: "Edutech" },
+  { key: "renewable energy", label: "Renewable Energy" },
 ] as const;
 
 const BADGE_ROTATION = ["High Interest", "Trending"] as const;
-
-const TRENDING = [
-  { name: "FYNTECH", sub: "CryptoRemit Africa", followers: "20 new investors this week" },
-  { name: "AGROTECH", sub: "SoilSense IoT", followers: "Featured by UN Innovation" },
-  { name: "FINTECH", sub: "PayMint", followers: "Rising fast this month" },
-] as const;
-
-const NEW_ON_INVESTMIND = [
-  {
-    name: "Aseya Oje",
-    title: "AquaClean Ghana",
-    desc: "Decentralized water filtration units designed for rural communities.",
-  },
-  {
-    name: "Sara Ali",
-    title: "SafeRoute Logistics",
-    desc: "Last-mile delivery for pharma and healthcare providers.",
-  },
-] as const;
 
 function formatDiscoveryTag(raw: string): string {
   const t = raw.trim().replace(/^#/, "");
@@ -49,27 +32,48 @@ function IconBox({ children }: { children: ReactNode }) {
   );
 }
 
-export function ExploreIdeasContent({ projects }: { projects: ExplorePublishedProject[] }) {
+export function ExploreIdeasContent({
+  projects,
+  trending,
+}: {
+  projects: ExplorePublishedProject[];
+  trending: TrendingProject[];
+}) {
+  const [activeChip, setActiveChip] = useState<(typeof CATEGORY_CHIPS)[number]["key"]>("all");
+
+  const visibleProjects = useMemo(() => {
+    if (activeChip === "all") return projects;
+    return projects.filter((p) => {
+      const s = p.sector?.toLowerCase().trim() ?? "";
+      const sub = p.subcategory?.toLowerCase().trim() ?? "";
+      const key = activeChip.toLowerCase();
+      return s.includes(key) || sub.includes(key);
+    });
+  }, [projects, activeChip]);
+
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden">
       <div
         className="flex items-stretch gap-2 sm:gap-3 overflow-x-auto pb-2 -mx-1 px-1 sm:mx-0 sm:px-0 snap-x snap-mandatory touch-pan-x"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        {CATEGORY_CHIPS.map((c, idx) => (
-          <Link
-            key={c.label}
-            href={c.href}
+        {CATEGORY_CHIPS.map((c) => {
+          const isActive = activeChip === c.key;
+          return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setActiveChip(c.key)}
             className={
-              idx === 0
+              isActive
                 ? "snap-start shrink-0 rounded-full text-white px-3 py-2.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold whitespace-nowrap shadow-sm min-h-[44px] inline-flex items-center justify-center touch-manipulation"
                 : "snap-start shrink-0 rounded-full border border-gray-200 bg-white text-gray-700 px-3 py-2.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium whitespace-nowrap hover:bg-gray-50 transition shadow-sm min-h-[44px] inline-flex items-center justify-center touch-manipulation"
             }
-            style={idx === 0 ? { backgroundColor: THEME.primary } : undefined}
+            style={isActive ? { backgroundColor: THEME.primary } : undefined}
           >
             {c.label}
-          </Link>
-        ))}
+          </button>
+        )})}
       </div>
 
       <div className="mt-4 sm:mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-w-0">
@@ -84,13 +88,14 @@ export function ExploreIdeasContent({ projects }: { projects: ExplorePublishedPr
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {projects.length === 0 ? (
+            {visibleProjects.length === 0 ? (
               <div className="sm:col-span-2 rounded-xl sm:rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600">
-                No published projects from other founders yet. When founders publish their ideas, they
-                will appear here for you to explore.
+                {activeChip === "all"
+                  ? "No published projects from other founders yet. When founders publish their ideas, they will appear here for you to explore."
+                  : "No ideas found in this category yet. Try another filter."}
               </div>
             ) : (
-              projects.map((item, i) => {
+              visibleProjects.map((item, i) => {
                 const title = item.project_name?.trim() || "Untitled project";
                 const desc =
                   item.short_description?.trim() || item.tagline?.trim() || "No description yet.";
@@ -216,56 +221,33 @@ export function ExploreIdeasContent({ projects }: { projects: ExplorePublishedPr
             </div>
 
             <div className="space-y-3 sm:space-y-4">
-              {TRENDING.map((t) => (
-                <div key={t.sub} className="flex items-start gap-2 sm:gap-3 min-w-0">
-                  <IconBox>
-                    <div
-                      className="w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shrink-0"
-                      style={{ backgroundColor: THEME.primary }}
-                    >
-                      {t.name[0]}
-                    </div>
-                  </IconBox>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs sm:text-sm font-semibold text-gray-900 wrap-break-word">
-                      {t.sub}
-                    </div>
-                    <div className="text-[11px] sm:text-xs text-gray-500 mt-0.5 wrap-break-word leading-snug">
-                      {t.followers}
+              {trending.length === 0 ? (
+                <p className="text-xs sm:text-sm text-gray-500">No views tracked yet.</p>
+              ) : (
+                trending.map((t) => (
+                  <div key={t.sub} className="flex items-start gap-2 sm:gap-3 min-w-0">
+                    <IconBox>
+                      <div
+                        className="w-6 h-6 rounded flex items-center justify-center text-white font-bold text-xs shrink-0"
+                        style={{ backgroundColor: THEME.primary }}
+                      >
+                        {t.name[0]}
+                      </div>
+                    </IconBox>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs sm:text-sm font-semibold text-gray-900 wrap-break-word">
+                        {t.sub}
+                      </div>
+                      <div className="text-[11px] sm:text-xs text-gray-500 mt-0.5 wrap-break-word leading-snug">
+                        {t.followers}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 min-w-0">
-            <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-3">New on InvestMind</h3>
-
-            <div className="space-y-3 sm:space-y-4">
-              {NEW_ON_INVESTMIND.map((n) => (
-                <div key={n.title} className="border border-gray-200/70 rounded-xl p-3 sm:p-4 bg-gray-50 min-w-0">
-                  <div className="text-[11px] sm:text-xs text-gray-500">{n.name}</div>
-                  <div className="text-xs sm:text-sm font-semibold text-gray-900 mt-0.5 wrap-break-word">
-                    {n.title}
-                  </div>
-                  <div className="text-[11px] sm:text-xs text-gray-600 mt-1 line-clamp-2 wrap-break-word">
-                    {n.desc}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 sm:mt-4">
-              <Link
-                href="/signup"
-                className="w-full inline-flex items-center justify-center rounded-xl px-4 py-3 sm:py-2.5 text-sm font-semibold text-white transition min-h-[48px] touch-manipulation hover:opacity-90"
-                style={{ backgroundColor: THEME.primary }}
-              >
-                Discover New Founders
-              </Link>
-            </div>
-          </div>
         </div>
       </div>
     </div>

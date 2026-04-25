@@ -67,7 +67,7 @@ create policy "Users can update own profile"
 -- 4) Validation (drop + re-add so re-run is safe)
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
-  add constraint profiles_role_check check (role is null or role in ('founder', 'innovator', 'investor', 'mentor'));
+  add constraint profiles_role_check check (role is null or role in ('founder', 'innovator', 'investor', 'mentor', 'admin'));
 
 alter table public.profiles drop constraint if exists profiles_age_check;
 alter table public.profiles
@@ -276,3 +276,84 @@ create policy "Public read published projects"
 -- 10) Founder interests + mentor expertise (for mentor recommendations)
 alter table public.profiles add column if not exists interest_sectors text[] not null default '{}';
 alter table public.profiles add column if not exists mentor_expertise text[] not null default '{}';
+
+-- 10b) Company admin approval + authority (role = 'admin')
+alter table public.profiles add column if not exists admin_approval_status text not null default 'none';
+alter table public.profiles add column if not exists admin_authority_level int;
+
+alter table public.profiles drop constraint if exists profiles_admin_approval_status_check;
+alter table public.profiles
+  add constraint profiles_admin_approval_status_check
+  check (admin_approval_status in ('none', 'pending', 'approved', 'rejected'));
+
+alter table public.profiles drop constraint if exists profiles_admin_authority_level_check;
+alter table public.profiles
+  add constraint profiles_admin_authority_level_check
+  check (admin_authority_level is null or (admin_authority_level >= 1 and admin_authority_level <= 10));
+
+drop policy if exists "Approved admins read all profiles" on public.profiles;
+create policy "Approved admins read all profiles"
+  on public.profiles for select
+  using (
+    exists (
+      select 1
+      from public.profiles adm
+      where adm.id = auth.uid()
+        and adm.role = 'admin'
+        and adm.admin_approval_status = 'approved'
+    )
+  );
+
+drop policy if exists "Approved admins update any profile" on public.profiles;
+create policy "Approved admins update any profile"
+  on public.profiles for update
+  using (
+    exists (
+      select 1
+      from public.profiles adm
+      where adm.id = auth.uid()
+        and adm.role = 'admin'
+        and adm.admin_approval_status = 'approved'
+    )
+  );
+
+-- 11) Mentorship requests
+create table if not exists public.mentorship_requests (
+  id bigint generated always as identity primary key,
+  requester_id uuid not null references auth.users (id) on delete cascade,
+  mentor_id uuid not null references public.profiles (id) on delete cascade,
+  message text not null,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint mentorship_requests_no_self check (requester_id <> mentor_id),
+  constraint mentorship_requests_message_len check (char_length(trim(message)) between 5 and 300)
+);
+
+create index if not exists mentorship_requests_mentor_status_time_idx
+  on public.mentorship_requests (mentor_id, status, created_at desc);
+
+create index if not exists mentorship_requests_requester_status_time_idx
+  on public.mentorship_requests (requester_id, status, created_at desc);
+
+alter table public.mentorship_requests enable row level security;
+
+drop policy if exists "Requesters insert own mentorship requests" on public.mentorship_requests;
+create policy "Requesters insert own mentorship requests"
+  on public.mentorship_requests for insert
+  with check (requester_id = auth.uid());
+
+drop policy if exists "Requesters read own mentorship requests" on public.mentorship_requests;
+create policy "Requesters read own mentorship requests"
+  on public.mentorship_requests for select
+  using (requester_id = auth.uid());
+
+drop policy if exists "Mentors read incoming mentorship requests" on public.mentorship_requests;
+create policy "Mentors read incoming mentorship requests"
+  on public.mentorship_requests for select
+  using (mentor_id = auth.uid());
+
+drop policy if exists "Mentors update incoming mentorship requests" on public.mentorship_requests;
+create policy "Mentors update incoming mentorship requests"
+  on public.mentorship_requests for update
+  using (mentor_id = auth.uid());

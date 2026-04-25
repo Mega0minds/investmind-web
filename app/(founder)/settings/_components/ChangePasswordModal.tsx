@@ -34,7 +34,9 @@ export function ChangePasswordModal({ email, open, onOpenChange }: Props) {
   }, []);
 
   useEffect(() => {
-    if (open) resetFlow();
+    if (!open) return;
+    const resetTimer = window.setTimeout(() => resetFlow(), 0);
+    return () => window.clearTimeout(resetTimer);
   }, [open, resetFlow]);
 
   useEffect(() => {

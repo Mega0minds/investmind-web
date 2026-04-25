@@ -10,20 +10,20 @@ export type EliteReachStats = {
 };
 
 function badgeLabel(role: SettingsEliteRole): string {
-  if (role === "investor") return "INVESTOR ELITE STATUS";
-  if (role === "founder") return "FOUNDER ELITE STATUS";
+  if (role === "investor") return "MENTOR ELITE STATUS";
+  if (role === "founder") return "CREATIVE ELITE STATUS";
   return "ELITE STATUS";
 }
 
 function audiencePlural(role: SettingsEliteRole): string {
-  if (role === "investor") return "founders";
-  if (role === "founder") return "investors";
+  if (role === "investor") return "creatives";
+  if (role === "founder") return "mentors";
   return "people";
 }
 
 function subtext(role: SettingsEliteRole): string {
   if (role === "investor") {
-    return "Stay active to stay visible to founders you care about.";
+    return "Stay active to stay visible to creatives you care about.";
   }
   if (role === "founder") {
     return "Maintain your activity levels to keep your search ranking high.";
