@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
+import { FOUNDER_INTEREST_SECTOR_OPTIONS } from "@/lib/mentor-matching";
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
 
@@ -17,7 +18,6 @@ type UploadDraft = {
   shortDescription: string;
   // Step 2
   sector: string;
-  subcategory: string;
   stage: string;
   // Step 3
   coverImageFileName: string;
@@ -54,7 +54,6 @@ function getDefaultDraft(step: WizardStep = 1): UploadDraft {
     tagline: "",
     shortDescription: "",
     sector: "",
-    subcategory: "",
     stage: "",
     coverImageFileName: "",
     screenshotFileNames: [],
@@ -70,15 +69,17 @@ function Stepper({
   step,
   editable,
   onStepClick,
+  stepComplete,
 }: {
   step: WizardStep;
   editable: boolean;
   onStepClick: (next: WizardStep) => void;
+  stepComplete: Record<WizardStep, boolean>;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 mt-4 mb-6">
       {STEPS.map((s, idx) => {
-        const done = s.id < step;
+        const complete = stepComplete[s.id];
         const active = s.id === step;
         return (
           <div key={s.id} className="flex-1 flex flex-col items-center">
@@ -91,12 +92,12 @@ function Stepper({
                 editable ? "cursor-pointer" : "cursor-default",
                 active
                   ? "bg-[#5A2D8F] border-[#5A2D8F] text-white"
-                  : done
+                  : complete
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                   : "bg-gray-50 border-gray-200 text-gray-400",
               ].join(" ")}
               aria-current={active ? "step" : undefined}
-              aria-label={`Go to ${s.title}`}
+              aria-label={`${s.title}${complete ? ", complete" : active ? ", current step" : ", incomplete"}`}
             >
               {idx + 1}
             </button>
@@ -117,8 +118,11 @@ export function UploadProjectWizard() {
   const [role, setRole] = useState<string | null>(null);
   const [listingId, setListingId] = useState<string | null>(null);
 
-  const [saveForLater, setSaveForLater] = useState(true);
   const [draft, setDraft] = useState<UploadDraft>(() => getDefaultDraft(1));
+  /** True when opened via `?listingId=` (editing an existing row). Used after Publish to decide reset vs stay. */
+  const [openedFromEditUrl, setOpenedFromEditUrl] = useState(false);
+  /** Server `projects.status` after load or save; `null` before any server row exists. */
+  const [listingStatus, setListingStatus] = useState<"draft" | "published" | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [showSubmitSuccessModal, setShowSubmitSuccessModal] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
@@ -127,6 +131,7 @@ export function UploadProjectWizard() {
   const [screenshotPreviewUrls, setScreenshotPreviewUrls] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimer = useRef<number | null>(null);
 
   // Load user + role + existing draft (if any).
@@ -157,11 +162,13 @@ export function UploadProjectWizard() {
       // If an explicit listingId is provided (from Edit button), load that exact project.
       try {
         if (listingIdParam) {
+          setOpenedFromEditUrl(true);
           const res = await fetch(`/api/listings/${listingIdParam}`);
           if (!res.ok) return;
           const payload = (await res.json()) as {
             listing?: {
               id: string;
+              status?: string | null;
               step?: number | null;
               project_name?: string | null;
               tagline?: string | null;
@@ -180,6 +187,8 @@ export function UploadProjectWizard() {
           };
           if (!payload.listing) return;
           const d = payload.listing;
+          const st = d.status === "published" || d.status === "draft" ? d.status : null;
+          setListingStatus(st);
           const requestedStep = stepParam ? clampStep(stepParam) : clampStep(d.step ?? 1);
           setListingId(d.id);
           setDraft({
@@ -188,7 +197,6 @@ export function UploadProjectWizard() {
             tagline: d.tagline ?? "",
             shortDescription: d.short_description ?? "",
             sector: d.sector ?? "",
-            subcategory: d.subcategory ?? "",
             stage: d.stage ?? "",
             coverImageFileName: d.cover_image_file_name ?? "",
             screenshotFileNames: Array.isArray(d.screenshot_file_names) ? d.screenshot_file_names : [],
@@ -205,7 +213,11 @@ export function UploadProjectWizard() {
         const stored = localStorage.getItem(storageKey);
         if (stored) {
           try {
-            const parsed = JSON.parse(stored) as Partial<UploadDraft> & { step?: WizardStep };
+            const parsedRaw = JSON.parse(stored) as Partial<UploadDraft> & {
+              step?: WizardStep;
+              subcategory?: string;
+            };
+            const { subcategory: _legacySub, ...parsed } = parsedRaw;
             const parsedLegacy = parsed as Partial<UploadDraft> & {
               step?: WizardStep;
               pitchDeckFileName?: string;
@@ -247,6 +259,7 @@ export function UploadProjectWizard() {
         const payload = (await res.json()) as {
           draft?: {
             id: string;
+            status?: string | null;
             step?: number | null;
             project_name?: string | null;
             tagline?: string | null;
@@ -265,6 +278,8 @@ export function UploadProjectWizard() {
         };
         if (!payload.draft) return;
         const d = payload.draft;
+        const st = d.status === "published" || d.status === "draft" ? d.status : "draft";
+        setListingStatus(st);
         const requestedStep = stepParam ? clampStep(stepParam) : clampStep(d.step ?? 1);
         setListingId(d.id);
         setDraft({
@@ -273,7 +288,6 @@ export function UploadProjectWizard() {
           tagline: d.tagline ?? "",
           shortDescription: d.short_description ?? "",
           sector: d.sector ?? "",
-          subcategory: d.subcategory ?? "",
           stage: d.stage ?? "",
           coverImageFileName: d.cover_image_file_name ?? "",
           screenshotFileNames: Array.isArray(d.screenshot_file_names) ? d.screenshot_file_names : [],
@@ -302,97 +316,97 @@ export function UploadProjectWizard() {
     setDraft((d) => ({ ...d, step: s }));
   }, []);
 
-  const saveToBackend = useCallback(async (status: "draft" | "published") => {
-    const res = await fetch("/api/listings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: listingId ?? undefined,
-        status,
-        step: draft.step,
-        projectName: draft.projectName,
-        tagline: draft.tagline,
-        shortDescription: draft.shortDescription,
-        sector: draft.sector,
-        subcategory: draft.subcategory,
-        stage: draft.stage,
-        coverImageFileName: draft.coverImageFileName,
-        screenshotFileNames: draft.screenshotFileNames,
-        productVideoUrl: draft.productVideoUrl,
-        discoveryTags: draft.discoveryTags,
-        market: draft.market,
-        pitchSummary: draft.pitchSummary,
-        teamSize: draft.teamSize,
-      }),
-    });
-    if (!res.ok) return;
-    const payload = (await res.json()) as { listing?: { id?: string } };
-    const nextId = payload.listing?.id;
-    if (nextId) setListingId(nextId);
-  }, [listingId, draft]);
+  const saveToBackend = useCallback(
+    async (status: "draft" | "published"): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const res = await fetch("/api/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: listingId ?? undefined,
+          status,
+          step: draft.step,
+          projectName: draft.projectName,
+          tagline: draft.tagline,
+          shortDescription: draft.shortDescription,
+          sector: draft.sector,
+          subcategory: "",
+          stage: draft.stage,
+          coverImageFileName: draft.coverImageFileName,
+          screenshotFileNames: draft.screenshotFileNames,
+          productVideoUrl: draft.productVideoUrl,
+          discoveryTags: draft.discoveryTags,
+          market: draft.market,
+          pitchSummary: draft.pitchSummary,
+          teamSize: draft.teamSize,
+        }),
+      });
+      if (!res.ok) {
+        let message = "Could not save. Please try again.";
+        try {
+          const err = (await res.json()) as { error?: string };
+          if (typeof err.error === "string" && err.error.trim()) message = err.error.trim();
+        } catch {
+          /* ignore */
+        }
+        return { ok: false, error: message };
+      }
+      const payload = (await res.json()) as {
+        listing?: { id?: string; status?: string | null };
+      };
+      const listing = payload.listing;
+      if (listing?.id) setListingId(listing.id);
+      if (listing?.status === "published" || listing?.status === "draft") {
+        setListingStatus(listing.status);
+      }
+      return { ok: true };
+    },
+    [listingId, draft]
+  );
 
-  // Persist draft (auto-save).
+  // Browser-only recovery (never writes to the database until you click Add to draft / Save / Publish).
   useEffect(() => {
-    if (!saveForLater) return;
     if (!userId) return;
-
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
       localStorage.setItem(storageKey, JSON.stringify(draft));
-      void saveToBackend("draft");
     }, 400);
-
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [draft, saveForLater, userId, saveToBackend]);
+  }, [draft, userId]);
 
-  const handleNext = () => {
-    if (!isCurrentStepValid) return;
-    const next = Math.min(5, draft.step + 1) as WizardStep;
-    setDraft((d) => ({ ...d, step: next }));
-    // Keep the URL in sync for share/resume.
-    router.replace(`/listings/new?step=${next}`);
-  };
+  function listingsNewHref(nextStep: WizardStep) {
+    const q = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    q.set("step", String(nextStep));
+    return `/listings/new?${q.toString()}`;
+  }
 
-  const handleBack = () => {
-    const prev = Math.max(1, draft.step - 1) as WizardStep;
-    setDraft((d) => ({ ...d, step: prev }));
-    router.replace(`/listings/new?step=${prev}`);
-  };
-
-  async function handleSubmit() {
-    if (!isCurrentStepValid) return;
+  async function handleAddToDraft() {
+    if (!userId) return;
+    setSaveError(null);
     setLoading(true);
     try {
-      await saveToBackend("published");
-      if (userId) {
-        const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
-        localStorage.removeItem(storageKey);
-      }
-      setDraft(getDefaultDraft(1));
-      setSaveForLater(true);
-      setListingId(null);
-      router.replace(`/listings/new?step=1`);
-      setShowSubmitSuccessModal(true);
+      const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+      const result = await saveToBackend("draft");
+      if (result.ok) void router.refresh();
+      else setSaveError(result.error);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleSaveDraftNow() {
+  async function handleSavePublished() {
     if (!userId) return;
-    const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
-    localStorage.setItem(storageKey, JSON.stringify(draft));
-    void saveToBackend("draft");
-  }
-
-  async function handleSaveChanges() {
-    if (!userId) return;
+    setSaveError(null);
     setLoading(true);
     try {
-      await saveToBackend("draft");
+      const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+      const result = await saveToBackend("published");
+      if (result.ok) void router.refresh();
+      else setSaveError(result.error);
     } finally {
       setLoading(false);
     }
@@ -467,26 +481,9 @@ export function UploadProjectWizard() {
   }
 
   const sectorOptions = useMemo(
-    () => [
-      { value: "Health & Biotech", label: "Health & Biotech" },
-      { value: "Fintech", label: "Fintech" },
-      { value: "Climate", label: "Climate" },
-      { value: "AgriTech", label: "AgriTech" },
-      { value: "EdTech", label: "EdTech" },
-    ],
+    () => FOUNDER_INTEREST_SECTOR_OPTIONS.map((s) => ({ value: s, label: s })),
     []
   );
-
-  const subcategoryOptions = useMemo(() => {
-    const map: Record<string, Array<{ value: string; label: string }>> = {
-      "Health & Biotech": [{ value: "Personalized Genomics", label: "Personalized Genomics" }],
-      Fintech: [{ value: "Lending & Credit", label: "Lending & Credit" }],
-      Climate: [{ value: "Solar & Energy", label: "Solar & Energy" }],
-      AgriTech: [{ value: "Supply Chain", label: "Supply Chain" }],
-      EdTech: [{ value: "Learning Platforms", label: "Learning Platforms" }],
-    };
-    return draft.sector ? map[draft.sector] ?? [] : [];
-  }, [draft.sector]);
 
   const stageOptions = useMemo(
     () => [
@@ -501,7 +498,7 @@ export function UploadProjectWizard() {
   const isStep1Valid = Boolean(
     draft.projectName.trim() && draft.tagline.trim() && draft.shortDescription.trim()
   );
-  const isStep2Valid = Boolean(draft.sector && draft.subcategory && draft.stage);
+  const isStep2Valid = Boolean(draft.sector && draft.stage);
   const isStep3Valid = Boolean(draft.coverImageFileName.trim());
   const isStep4Valid = Boolean(draft.discoveryTags.length > 0 && draft.market.trim());
   const isStep5Valid = Boolean(draft.pitchSummary.trim() && draft.teamSize.trim());
@@ -513,20 +510,65 @@ export function UploadProjectWizard() {
     (draft.step === 4 && isStep4Valid) ||
     (draft.step === 5 && isStep5Valid);
 
+  const isFullyValid =
+    isStep1Valid && isStep2Valid && isStep3Valid && isStep4Valid && isStep5Valid;
+
+  async function handlePublish() {
+    if (!isFullyValid) return;
+    if (!userId) return;
+    setSaveError(null);
+    setLoading(true);
+    try {
+      const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+      const result = await saveToBackend("published");
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      localStorage.removeItem(storageKey);
+      if (openedFromEditUrl) {
+        void router.refresh();
+      } else {
+        setDraft(getDefaultDraft(1));
+        setListingId(null);
+        setListingStatus(null);
+        router.replace("/listings/new?step=1");
+      }
+      setShowSubmitSuccessModal(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleNext = () => {
+    if (!isCurrentStepValid) return;
+    const next = Math.min(5, draft.step + 1) as WizardStep;
+    setDraft((d) => ({ ...d, step: next }));
+    router.replace(listingsNewHref(next));
+  };
+
+  const handleBack = () => {
+    const prev = Math.max(1, draft.step - 1) as WizardStep;
+    setDraft((d) => ({ ...d, step: prev }));
+    router.replace(listingsNewHref(prev));
+  };
+
   const currentStepValidationMessage =
     draft.step === 1
       ? "Project name, tagline, and short description are required."
       : draft.step === 2
-      ? "Sector, subcategory, and stage are required."
+      ? "Sector and stage are required."
       : draft.step === 3
       ? "Cover image is required."
       : draft.step === 4
       ? "Add at least one discovery tag and complete target market analysis."
       : "Pitch summary and team size are required.";
   const isEditMode = Boolean(listingId);
+  const isPublished = listingStatus === "published";
   const goToStep = (next: WizardStep) => {
     setDraft((d) => ({ ...d, step: next }));
-    router.replace(`/listings/new?step=${next}`);
+    router.replace(listingsNewHref(next));
   };
 
   useEffect(() => {
@@ -561,32 +603,24 @@ export function UploadProjectWizard() {
             Share your idea with mentors and other creatives. Add details so they can understand your vision.
           </p>
         </div>
-        {isEditMode && (
-          <button
-            type="button"
-            onClick={() => void handleSaveChanges()}
-            disabled={loading || mediaUploading}
-            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-            style={{ backgroundColor: THEME.primary }}
-          >
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
-        )}
       </div>
 
-      <Stepper step={draft.step} editable={isEditMode} onStepClick={goToStep} />
+      <Stepper
+        step={draft.step}
+        editable={isEditMode}
+        onStepClick={goToStep}
+        stepComplete={{
+          1: isStep1Valid,
+          2: isStep2Valid,
+          3: isStep3Valid,
+          4: isStep4Valid,
+          5: isStep5Valid,
+        }}
+      />
 
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="mb-5">
           <h2 className="text-lg font-bold text-gray-900">{current.title}</h2>
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 select-none">
-            <input
-              type="checkbox"
-              checked={saveForLater}
-              onChange={(e) => setSaveForLater(e.target.checked)}
-            />
-            Auto-save enabled
-          </label>
         </div>
 
         {draft.step === 1 && (
@@ -637,72 +671,31 @@ export function UploadProjectWizard() {
               <div className="mb-3">
                 <div className="text-sm font-semibold text-gray-900">Industry &amp; Sector</div>
                 <div className="text-xs text-gray-600 mt-1">
-                  Specify your market vertical and specific niche.
+                  Choose the sector that best describes your venture.
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold tracking-wide text-gray-400 uppercase">
-                    Main Sector
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {sectorOptions.map((s) => {
-                      const active = draft.sector === s.value;
-                      return (
-                        <button
-                          key={s.value}
-                          type="button"
-                          onClick={() => {
-                            setDraft((d) => ({ ...d, sector: s.value, subcategory: "" }));
-                          }}
-                          className={`rounded-xl border px-3 py-2 text-sm text-left touch-manipulation min-h-[44px] text-gray-900 ${
-                            active
-                              ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
-                              : "border-gray-200 bg-white hover:bg-gray-50"
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold tracking-wide text-gray-400 uppercase">
-                    Subcategory
-                  </div>
-                  {draft.sector ? (
-                    <div className="space-y-2">
-                      {subcategoryOptions.length ? (
-                        <div className="grid grid-cols-1 gap-2">
-                          {subcategoryOptions.map((sc) => {
-                            const active = draft.subcategory === sc.value;
-                            return (
-                              <button
-                                key={sc.value}
-                                type="button"
-                                onClick={() => setDraft((d) => ({ ...d, subcategory: sc.value }))}
-                                className={`rounded-xl border px-3 py-2 text-sm text-left touch-manipulation min-h-[44px] text-gray-900 ${
-                                  active
-                                    ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
-                                    : "border-gray-200 bg-white hover:bg-gray-50"
-                                }`}
-                              >
-                                {sc.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-500">No subcategories available for this sector yet.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500">Select a main sector first.</p>
-                  )}
-                </div>
+              <div className="text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-2">
+                Sector
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {sectorOptions.map((s) => {
+                  const active = draft.sector === s.value;
+                  return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setDraft((d) => ({ ...d, sector: s.value }))}
+                      className={`rounded-xl border px-3 py-2 text-sm text-left touch-manipulation min-h-[44px] text-gray-900 ${
+                        active
+                          ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
+                          : "border-gray-200 bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -738,7 +731,7 @@ export function UploadProjectWizard() {
 
             {!isStep2Valid && (
               <p className="text-xs text-gray-500">
-                Select sector, subcategory, and stage to continue.
+                Select sector and stage to continue.
               </p>
             )}
           </div>
@@ -1097,6 +1090,12 @@ export function UploadProjectWizard() {
           </div>
         )}
 
+        {saveError && (
+          <p className="mt-4 text-sm text-red-600" role="alert">
+            {saveError}
+          </p>
+        )}
+
         <div className="flex items-center justify-between gap-3 mt-6">
           <button
             type="button"
@@ -1108,14 +1107,14 @@ export function UploadProjectWizard() {
           </button>
 
           {draft.step < 5 ? (
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={isEditMode ? () => void handleSaveChanges() : handleSaveDraftNow}
-                disabled={loading || mediaUploading}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation"
+                onClick={() => void (isPublished ? handleSavePublished() : handleAddToDraft())}
+                disabled={loading || mediaUploading || !userId}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation disabled:opacity-60"
               >
-                {isEditMode ? (loading ? "Saving..." : "Save Changes") : "Save as Draft"}
+                {loading ? "Saving…" : isPublished ? "Save" : "Add to draft"}
               </button>
               <button
                 type="button"
@@ -1127,26 +1126,48 @@ export function UploadProjectWizard() {
                 Next Step
               </button>
             </div>
+          ) : isPublished ? (
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSavePublished()}
+                disabled={loading || mediaUploading || !userId}
+                className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 touch-manipulation disabled:opacity-60"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                {loading ? "Saving…" : "Save"}
+              </button>
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => void (isEditMode ? handleSaveChanges() : handleSubmit())}
-              disabled={loading || (!isEditMode && !isCurrentStepValid) || mediaUploading}
-              className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-70 touch-manipulation"
-              style={{ backgroundColor: THEME.primary }}
-            >
-              {isEditMode
-                ? loading
-                  ? "Saving..."
-                  : "Save Changes"
-                : loading
-                ? "Uploading…"
-                : "Upload Your Project"}
-            </button>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handleAddToDraft()}
+                disabled={loading || mediaUploading || !userId}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation disabled:opacity-60"
+              >
+                {loading ? "Saving…" : "Add to draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePublish()}
+                disabled={loading || !isFullyValid || mediaUploading || !userId}
+                className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 touch-manipulation disabled:opacity-60"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                {loading ? "Publishing…" : "Publish"}
+              </button>
+            </div>
           )}
         </div>
         {!isEditMode && !isCurrentStepValid && (
           <p className="mt-2 text-xs text-red-600">{currentStepValidationMessage}</p>
+        )}
+        {draft.step === 5 && !isPublished && !isFullyValid && (
+          <p className="mt-2 text-xs text-gray-500">
+            Publish is enabled when every step shows as complete (green) in the stepper above—including
+            cover image, tags, and market.
+          </p>
         )}
       </div>
 
@@ -1158,9 +1179,10 @@ export function UploadProjectWizard() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 text-center">Project submitted</h3>
+            <h3 className="text-lg font-bold text-gray-900 text-center">Project published</h3>
             <p className="mt-2 text-sm text-gray-600 text-center">
-              Your project was saved successfully. Continue from your dashboard.
+              Your project is live for mentors and the community. You can keep editing from your
+              listings anytime.
             </p>
             <button
               type="button"

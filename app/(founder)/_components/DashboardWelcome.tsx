@@ -66,7 +66,11 @@ type DashboardCachedPayload = {
   requestedMentorIds: string[];
   exploreIdeas: DashboardExploreIdeaRow[];
   exploreHint: string | null;
+  /** Mentors (investor role) should not see founder project UI on the dashboard. */
+  hideMyProjectsSection: boolean;
 };
+
+const DASHBOARD_CACHE_KEY_SUFFIX = ":v2";
 
 const dashboardCache = new Map<string, { expiresAt: number; payload: DashboardCachedPayload }>();
 
@@ -86,6 +90,7 @@ export function DashboardWelcome() {
   const [exploreIdeas, setExploreIdeas] = useState<DashboardExploreIdeaRow[]>([]);
   const [exploreLoading, setExploreLoading] = useState(true);
   const [exploreHint, setExploreHint] = useState<string | null>(null);
+  const [hideMyProjectsSection, setHideMyProjectsSection] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState<RecommendedMentor | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -110,6 +115,7 @@ export function DashboardWelcome() {
       setRequestedMentorIds(payload.requestedMentorIds);
       setExploreIdeas(payload.exploreIdeas);
       setExploreHint(payload.exploreHint);
+      setHideMyProjectsSection(payload.hideMyProjectsSection);
       setProjectsLoading(false);
       setMentorsLoading(false);
       setExploreLoading(false);
@@ -127,14 +133,26 @@ export function DashboardWelcome() {
         return;
       }
 
-      const cached = dashboardCache.get(user.id);
+      const cached = dashboardCache.get(user.id + DASHBOARD_CACHE_KEY_SUFFIX);
       const now = Date.now();
       if (cached && cached.expiresAt > now && !cancelled) {
         applyPayload(cached.payload);
       }
 
+      const profileRes = await supabase
+        .from("profiles")
+        .select("first_name, role, interest_sectors")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (normalizeRole((profileRes.data as { role?: string | null } | null)?.role ?? null) === "investor") {
+        setHideMyProjectsSection(true);
+        setProjectsLoading(false);
+      }
+
       const [
-        profileRes,
         ideasCountRes,
         projectCardsRes,
         projectCategoriesRes,
@@ -142,11 +160,6 @@ export function DashboardWelcome() {
         mentorshipRequestsRes,
         exploreProjectsRes,
       ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("first_name, role, interest_sectors")
-          .eq("id", user.id)
-          .maybeSingle(),
         supabase
           .from("projects")
           .select("id", { count: "exact", head: true })
@@ -191,6 +204,7 @@ export function DashboardWelcome() {
       const first = profile?.first_name?.trim() || "there";
       const normalized = normalizeRole(profile?.role ?? null);
       const isFounderLike = normalized === "founder";
+      const hideProjectsUi = normalized === "investor";
 
       const statsRequestsRes = isFounderLike
         ? await supabase
@@ -362,8 +376,9 @@ export function DashboardWelcome() {
         requestedMentorIds,
         exploreIdeas,
         exploreHint,
+        hideMyProjectsSection: hideProjectsUi,
       };
-      dashboardCache.set(user.id, {
+      dashboardCache.set(user.id + DASHBOARD_CACHE_KEY_SUFFIX, {
         payload,
         expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
       });
@@ -577,112 +592,114 @@ export function DashboardWelcome() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 min-w-0">
         {/* Left: My Projects + Recent Requests */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
-          <section className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">My Projects</h3>
-              <Link
-                href="/listings"
-                className="text-xs sm:text-sm font-medium hover:underline shrink-0"
-                style={{ color: THEME.primary }}
-              >
-                View All
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {projectsLoading ? (
-                <>
-                  <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse">
-                    <div className="h-28 sm:h-32 bg-gray-200" />
-                    <div className="p-3 sm:p-4 space-y-2">
-                      <div className="h-4 bg-gray-200 rounded w-3/4" />
-                      <div className="h-3 bg-gray-100 rounded w-full" />
+          {!hideMyProjectsSection && (
+            <section className="min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">My Projects</h3>
+                <Link
+                  href="/listings"
+                  className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                  style={{ color: THEME.primary }}
+                >
+                  View All
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {projectsLoading ? (
+                  <>
+                    <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse">
+                      <div className="h-28 sm:h-32 bg-gray-200" />
+                      <div className="p-3 sm:p-4 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse hidden sm:block">
-                    <div className="h-28 sm:h-32 bg-gray-200" />
-                    <div className="p-3 sm:p-4 space-y-2">
-                      <div className="h-4 bg-gray-200 rounded w-3/4" />
-                      <div className="h-3 bg-gray-100 rounded w-full" />
+                    <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse hidden sm:block">
+                      <div className="h-28 sm:h-32 bg-gray-200" />
+                      <div className="p-3 sm:p-4 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                      </div>
                     </div>
-                  </div>
-                </>
-              ) : dashboardProjects.length === 0 ? (
-                <div className="sm:col-span-2 rounded-xl sm:rounded-2xl border border-dashed border-gray-300 bg-gray-50/80 p-6 text-center">
-                  <p className="text-sm text-gray-600">No projects yet. Create your first idea to see it here.</p>
-                  <Link
-                    href="/listings/new"
-                    className="mt-3 inline-flex rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                    style={{ backgroundColor: THEME.primary }}
-                  >
-                    Upload New Idea
-                  </Link>
-                </div>
-              ) : (
-                dashboardProjects.map((proj) => {
-                  const title = proj.project_name?.trim() || "Untitled Project";
-                  const desc =
-                    proj.short_description?.trim() || proj.tagline?.trim() || "No description yet.";
-                  const isPublished = proj.status === "published";
-                  const coverUrl = projectMediaPublicUrl(proj.cover_image_file_name);
-                  return (
-                    <div
-                      key={proj.id}
-                      className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
+                  </>
+                ) : dashboardProjects.length === 0 ? (
+                  <div className="sm:col-span-2 rounded-xl sm:rounded-2xl border border-dashed border-gray-300 bg-gray-50/80 p-6 text-center">
+                    <p className="text-sm text-gray-600">No projects yet. Create your first idea to see it here.</p>
+                    <Link
+                      href="/listings/new"
+                      className="mt-3 inline-flex rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                      style={{ backgroundColor: THEME.primary }}
                     >
-                      <div className="relative h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 shrink-0">
-                        {coverUrl ? (
-                          <Image
-                            src={coverUrl}
-                            alt={title}
-                            fill
-                            unoptimized
-                            className="object-cover"
-                            sizes="(max-width: 640px) 100vw, 50vw"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center">
-                            <div className="w-16 h-16 rounded-lg bg-gray-300/80 flex items-center justify-center">
-                              <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-                              </svg>
+                      Upload New Idea
+                    </Link>
+                  </div>
+                ) : (
+                  dashboardProjects.map((proj) => {
+                    const title = proj.project_name?.trim() || "Untitled Project";
+                    const desc =
+                      proj.short_description?.trim() || proj.tagline?.trim() || "No description yet.";
+                    const isPublished = proj.status === "published";
+                    const coverUrl = projectMediaPublicUrl(proj.cover_image_file_name);
+                    return (
+                      <div
+                        key={proj.id}
+                        className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
+                      >
+                        <div className="relative h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 shrink-0">
+                          {coverUrl ? (
+                            <Image
+                              src={coverUrl}
+                              alt={title}
+                              fill
+                              unoptimized
+                              className="object-cover"
+                              sizes="(max-width: 640px) 100vw, 50vw"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center">
+                              <div className="w-16 h-16 rounded-lg bg-gray-300/80 flex items-center justify-center">
+                                <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                                </svg>
+                              </div>
                             </div>
+                          )}
+                        </div>
+                        <div className="p-3 sm:p-4 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
+                            <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{title}</h4>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
+                                isPublished ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {isPublished ? "PUBLISHED" : "DRAFT"}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="p-3 sm:p-4 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
-                          <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{title}</h4>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium shrink-0 ${
-                              isPublished ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            {isPublished ? "PUBLISHED" : "DRAFT"}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-3 sm:mb-4">{desc}</p>
-                        <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/listings/manage/${proj.id}`}
-                            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
-                            style={{ backgroundColor: THEME.primary }}
-                          >
-                            View
-                          </Link>
-                          <Link
-                            href={`/listings/new?listingId=${proj.id}&step=1`}
-                            className="rounded-lg border border-gray-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                          >
-                            Edit
-                          </Link>
+                          <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-3 sm:mb-4">{desc}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/listings/manage/${proj.id}`}
+                              className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition hover:opacity-90"
+                              style={{ backgroundColor: THEME.primary }}
+                            >
+                              View
+                            </Link>
+                            <Link
+                              href={`/listings/new?listingId=${proj.id}&step=1`}
+                              className="rounded-lg border border-gray-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                            >
+                              Edit
+                            </Link>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          )}
 
           <div className="lg:hidden">{mentorsSection}</div>
 

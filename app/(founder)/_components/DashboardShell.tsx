@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
+import { normalizeRole, type CanonicalRole } from "@/lib/roles";
 
 const SIDEBAR_ID = "dashboard-sidebar";
 
@@ -118,6 +119,8 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const [userDisplay, setUserDisplay] = useState<string>("Founder");
+  /** Used to hide founder-only nav (e.g. My Projects) for mentors. */
+  const [normalizedRole, setNormalizedRole] = useState<CanonicalRole | "unknown" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
   const [sidebarAccountOpen, setSidebarAccountOpen] = useState(false);
@@ -130,10 +133,11 @@ export function DashboardShell({
       if (session?.user) {
         supabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("first_name, last_name, role")
           .eq("id", session.user.id)
           .maybeSingle()
           .then(({ data }) => {
+            setNormalizedRole(normalizeRole((data as { role?: string | null } | null)?.role ?? null));
             if (data?.first_name)
               setUserDisplay(
                 data.last_name
@@ -205,7 +209,9 @@ export function DashboardShell({
           </button>
         </div>
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto overscroll-contain">
-          {NAV_ITEMS.map(({ href, label, icon }) => {
+          {NAV_ITEMS.filter(
+            (item) => !(normalizedRole === "investor" && item.href === "/listings")
+          ).map(({ href, label, icon }) => {
             const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
               <Link

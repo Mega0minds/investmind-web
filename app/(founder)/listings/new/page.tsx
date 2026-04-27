@@ -1,12 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { redirectInvestorFromListingsArea } from "../_lib/redirectInvestorFromListings";
+import { NewListingClient } from "./NewListingClient";
 
-import { DashboardShell } from "../../_components/DashboardShell";
-import { UploadProjectWizard } from "../_components/UploadProjectWizard";
-
-export default function NewListing() {
-  return (
-    <DashboardShell title="Upload Your Project">
-      <UploadProjectWizard />
-    </DashboardShell>
-  );
+export default async function NewListingPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await redirectInvestorFromListingsArea(supabase, user.id);
+  return <NewListingClient />;
 }

@@ -4,7 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { THEME } from "@/lib/constants";
-import type { ExplorePublishedProject, TrendingProject } from "@/lib/explore-projects";
+import {
+  exploreProjectMatchesViewerCategories,
+  type ExplorePublishedProject,
+  type TrendingProject,
+} from "@/lib/explore-projects";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
 
 const CATEGORY_CHIPS = [
@@ -32,16 +36,131 @@ function IconBox({ children }: { children: ReactNode }) {
   );
 }
 
+function byRecentUpdated(a: ExplorePublishedProject, b: ExplorePublishedProject): number {
+  return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
+}
+
+function ExploreProjectCard({
+  item,
+  badgeIndex,
+}: {
+  item: ExplorePublishedProject;
+  badgeIndex: number;
+}) {
+  const title = item.project_name?.trim() || "Untitled project";
+  const desc =
+    item.short_description?.trim() || item.tagline?.trim() || "No description yet.";
+  const coverUrl = projectMediaPublicUrl(item.cover_image_file_name);
+  const tags = (item.discovery_tags ?? [])
+    .map(formatDiscoveryTag)
+    .filter(Boolean)
+    .slice(0, 4);
+  const sectorTags = [item.sector, item.subcategory]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .map((s) => formatDiscoveryTag(s));
+  const displayTags = tags.length ? tags : sectorTags.slice(0, 4);
+  const badge = BADGE_ROTATION[badgeIndex % BADGE_ROTATION.length];
+  const updated =
+    item.updated_at &&
+    !Number.isNaN(Date.parse(item.updated_at)) &&
+    new Date(item.updated_at).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  return (
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0 flex flex-col">
+      <div className="relative h-24 sm:h-28 md:h-32 shrink-0 bg-linear-to-br from-teal-500/15 to-emerald-600/15">
+        {coverUrl ? (
+          <Image
+            src={coverUrl}
+            alt={title}
+            fill
+            unoptimized
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, 400px"
+          />
+        ) : null}
+        <div className="absolute inset-0 flex items-start justify-end p-3 sm:p-4 pointer-events-none">
+          <div className="rounded-full bg-white/90 border border-white/40 px-2.5 sm:px-3 py-1 text-[10px] sm:text-[11px] font-semibold text-gray-700 shadow-sm flex items-center gap-1.5 sm:gap-2 max-w-[85%]">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shrink-0" />
+            <span className="truncate">{badge}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
+        <h3 className="font-semibold text-gray-900 text-sm sm:text-base wrap-break-word">{title}</h3>
+        <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2 wrap-break-word">{desc}</p>
+
+        {displayTags.length > 0 && (
+          <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
+            {displayTags.map((t) => (
+              <span
+                key={t}
+                className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-700"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 sm:mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-1 min-w-0">
+          <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 shrink-0">
+            <span className="inline-flex items-center gap-1">
+              <svg
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              {updated || "Recently"}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:shrink-0">
+            <Link
+              href={`/listings/${item.id}`}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 sm:py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto"
+            >
+              Details
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-lg px-3 py-2.5 sm:py-2 text-xs font-semibold text-white transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto hover:opacity-90"
+              style={{ backgroundColor: THEME.primary }}
+            >
+              Connect
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ExploreIdeasContent({
   projects,
   trending,
+  viewerCategoryKeys = [],
 }: {
   projects: ExplorePublishedProject[];
   trending: TrendingProject[];
+  /** Logged-in viewer: interests + sectors from their own projects; used to rank “For you” first. */
+  viewerCategoryKeys?: string[];
 }) {
   const [activeChip, setActiveChip] = useState<(typeof CATEGORY_CHIPS)[number]["key"]>("all");
 
-  const visibleProjects = useMemo(() => {
+  const chipFiltered = useMemo(() => {
     if (activeChip === "all") return projects;
     return projects.filter((p) => {
       const s = p.sector?.toLowerCase().trim() ?? "";
@@ -50,6 +169,38 @@ export function ExploreIdeasContent({
       return s.includes(key) || sub.includes(key);
     });
   }, [projects, activeChip]);
+
+  const {
+    relatedProjects,
+    otherProjects,
+    showForYouHeading,
+    showOutsideHeading,
+    showNoOutsideMatches,
+  } = useMemo(() => {
+    if (!viewerCategoryKeys.length) {
+      return {
+        relatedProjects: [] as ExplorePublishedProject[],
+        otherProjects: chipFiltered,
+        showForYouHeading: false,
+        showOutsideHeading: false,
+        showNoOutsideMatches: false,
+      };
+    }
+    const related = chipFiltered.filter((p) =>
+      exploreProjectMatchesViewerCategories(p, viewerCategoryKeys)
+    );
+    const relatedIds = new Set(related.map((p) => p.id));
+    const other = chipFiltered.filter((p) => !relatedIds.has(p.id));
+    related.sort(byRecentUpdated);
+    other.sort(byRecentUpdated);
+    return {
+      relatedProjects: related,
+      otherProjects: other,
+      showForYouHeading: related.length > 0,
+      showOutsideHeading: related.length > 0 && other.length > 0,
+      showNoOutsideMatches: related.length > 0 && other.length === 0,
+    };
+  }, [chipFiltered, viewerCategoryKeys]);
 
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden">
@@ -88,121 +239,49 @@ export function ExploreIdeasContent({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {visibleProjects.length === 0 ? (
+            {chipFiltered.length === 0 ? (
               <div className="sm:col-span-2 rounded-xl sm:rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600">
                 {activeChip === "all"
                   ? "No published projects from other founders yet. When founders publish their ideas, they will appear here for you to explore."
                   : "No ideas found in this category yet. Try another filter."}
               </div>
             ) : (
-              visibleProjects.map((item, i) => {
-                const title = item.project_name?.trim() || "Untitled project";
-                const desc =
-                  item.short_description?.trim() || item.tagline?.trim() || "No description yet.";
-                const coverUrl = projectMediaPublicUrl(item.cover_image_file_name);
-                const tags = (item.discovery_tags ?? [])
-                  .map(formatDiscoveryTag)
-                  .filter(Boolean)
-                  .slice(0, 4);
-                const sectorTags = [item.sector, item.subcategory]
-                  .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-                  .map((s) => formatDiscoveryTag(s));
-                const displayTags = tags.length ? tags : sectorTags.slice(0, 4);
-                const badge = BADGE_ROTATION[i % BADGE_ROTATION.length];
-                const updated =
-                  item.updated_at &&
-                  !Number.isNaN(Date.parse(item.updated_at)) &&
-                  new Date(item.updated_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  });
-
-                return (
-                  <div
-                    key={item.id}
-                    className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0 flex flex-col"
-                  >
-                    <div className="relative h-24 sm:h-28 md:h-32 shrink-0 bg-linear-to-br from-teal-500/15 to-emerald-600/15">
-                      {coverUrl ? (
-                        <Image
-                          src={coverUrl}
-                          alt={title}
-                          fill
-                          unoptimized
-                          className="object-cover"
-                          sizes="(max-width: 640px) 100vw, 400px"
-                        />
-                      ) : null}
-                      <div className="absolute inset-0 flex items-start justify-end p-3 sm:p-4 pointer-events-none">
-                        <div className="rounded-full bg-white/90 border border-white/40 px-2.5 sm:px-3 py-1 text-[10px] sm:text-[11px] font-semibold text-gray-700 shadow-sm flex items-center gap-1.5 sm:gap-2 max-w-[85%]">
-                          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shrink-0" />
-                          <span className="truncate">{badge}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 sm:p-4 flex-1 flex flex-col min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base wrap-break-word">
-                        {title}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2 wrap-break-word">
-                        {desc}
-                      </p>
-
-                      {displayTags.length > 0 && (
-                        <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
-                          {displayTags.map((t) => (
-                            <span
-                              key={t}
-                              className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-700"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="mt-3 sm:mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-1 min-w-0">
-                        <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 shrink-0">
-                          <span className="inline-flex items-center gap-1">
-                            <svg
-                              className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                              />
-                            </svg>
-                            {updated || "Recently"}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:shrink-0">
-                          <Link
-                            href={`/listings/${item.id}`}
-                            className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 sm:py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50 transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto"
-                          >
-                            Details
-                          </Link>
-                          <Link
-                            href="/signup"
-                            className="rounded-lg px-3 py-2.5 sm:py-2 text-xs font-semibold text-white transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto hover:opacity-90"
-                            style={{ backgroundColor: THEME.primary }}
-                          >
-                            Connect
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
+              <>
+                {showForYouHeading && (
+                  <div className="sm:col-span-2 pt-1">
+                    <h3 className="text-sm font-bold text-gray-900">For you</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Ideas aligned with your interests and project sectors.
+                    </p>
                   </div>
-                );
-              })
+                )}
+                {relatedProjects.map((item, i) => (
+                  <ExploreProjectCard key={item.id} item={item} badgeIndex={i} />
+                ))}
+                {showOutsideHeading && (
+                  <div className="sm:col-span-2 mt-6 pt-4 border-t border-gray-200">
+                    <h3 className="text-sm font-bold text-gray-900">Outside your interests</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Ideas that don&apos;t match your saved sectors or portfolio—still worth exploring,
+                      newest first.
+                    </p>
+                  </div>
+                )}
+                {showNoOutsideMatches && (
+                  <div className="sm:col-span-2 mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 text-xs text-gray-600">
+                    Everything in this view fits your profile. Switch to{" "}
+                    <span className="font-semibold text-gray-800">All Ideas</span> or another category
+                    to see projects outside your usual sectors.
+                  </div>
+                )}
+                {otherProjects.map((item, i) => (
+                  <ExploreProjectCard
+                    key={item.id}
+                    item={item}
+                    badgeIndex={relatedProjects.length + i}
+                  />
+                ))}
+              </>
             )}
           </div>
         </div>

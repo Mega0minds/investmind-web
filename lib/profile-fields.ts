@@ -4,6 +4,7 @@ export type ProfileRowForSettings = {
   full_name?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  role?: string | null;
   avatar_url?: string | null;
   location?: string | null;
   bio?: string | null;

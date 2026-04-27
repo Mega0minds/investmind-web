@@ -47,10 +47,20 @@ export function AdminSignupForm() {
       return;
     }
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
+    const adminLoginUrl =
+      siteUrl && /^https?:\/\//i.test(siteUrl)
+        ? `${siteUrl}/admin/login`
+        : typeof window !== "undefined"
+          ? `${window.location.origin}/admin/login`
+          : undefined;
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: `${firstName} ${lastName}`.trim() } },
+      options: {
+        data: { full_name: `${firstName} ${lastName}`.trim() },
+        emailRedirectTo: adminLoginUrl,
+      },
     });
 
     if (signUpError) {

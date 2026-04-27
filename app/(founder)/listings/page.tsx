@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
 import { DeleteProjectButton } from "./_components/DeleteProjectButton";
+import { redirectInvestorFromListingsArea } from "./_lib/redirectInvestorFromListings";
 
 const FILTERS = ["All Projects", "Published", "Drafts", "Under Review"] as const;
 type FilterValue = "all" | "published" | "drafts" | "under-review";
@@ -52,6 +53,7 @@ export default async function FounderListings({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await redirectInvestorFromListingsArea(supabase, user.id);
 
   let projects: ProjectRow[] = [];
   const { data, error } = await supabase
@@ -124,10 +126,8 @@ export default async function FounderListings({
           )})}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-w-0">
-          {/* Main project grid */}
-          <div className="lg:col-span-8 min-w-0 order-1">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {filteredProjects.map((project) => {
                 const pct = completionPct(project.step);
                 const isDraft = project.status === "draft";
@@ -146,7 +146,7 @@ export default async function FounderListings({
                           fill
                           unoptimized
                           className="object-cover"
-                          sizes="(max-width: 640px) 100vw, 420px"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       )}
                       <span
@@ -199,7 +199,7 @@ export default async function FounderListings({
               })}
 
               {!filteredProjects.length && (
-                <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 text-center text-gray-500 sm:col-span-2">
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 text-center text-gray-500 sm:col-span-2 lg:col-span-3">
                   {activeFilter === "all"
                     ? "No projects yet. Create your first one to see it here."
                     : "No projects found for this filter."}
@@ -225,20 +225,6 @@ export default async function FounderListings({
                 </p>
               </Link>
             </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="lg:col-span-4 min-w-0 order-2">
-            {/* Latest Activity */}
-            <div className="rounded-2xl bg-sky-50 border border-sky-100 p-4 sm:p-5 min-w-0">
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-3">Latest Activity</h3>
-              <p className="text-xs sm:text-sm text-gray-700 leading-relaxed wrap-break-word">
-                Venture Capital <span className="font-semibold">&quot;Atlas&quot;</span> viewed your{" "}
-                <span className="font-semibold">SolarGrid</span> pitch{" "}
-                <span className="text-gray-500">2 hours ago from London, UK.</span>
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </DashboardShell>

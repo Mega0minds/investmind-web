@@ -1,10 +1,22 @@
-/** Main sectors (aligned with project upload wizard). */
+/** Main sectors (aligned with project upload wizard and founder interest chips in Settings). */
 export const FOUNDER_INTEREST_SECTOR_OPTIONS = [
   "Health & Biotech",
   "Fintech",
   "Climate",
   "AgriTech",
   "EdTech",
+  "AI & Machine Learning",
+  "Cybersecurity",
+  "SaaS & Enterprise",
+  "Consumer & Retail",
+  "GovTech & Civic Tech",
+  "Mobility & Logistics",
+  "Real Estate & PropTech",
+  "Media & Entertainment",
+  "Manufacturing & Hardware",
+  "Social Impact",
+  "Energy & Utilities",
+  "InsurTech",
 ] as const;
 
 export type MentorProfileRow = {

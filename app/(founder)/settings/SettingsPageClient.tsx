@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import Link from "next/link";
 import { PROFILE_BIO_MAX_LENGTH, THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileFormFields, type ProfileRowForSettings } from "@/lib/profile-fields";
@@ -88,7 +87,10 @@ export function SettingsPageClient({
   eliteReach,
 }: SettingsPageClientProps) {
   const normalizedProfileRole = normalizeRole(profileRole);
-  const isFounderRole = normalizedProfileRole === "founder";
+  const [selectedRole, setSelectedRole] = useState<"founder" | "investor">(
+    normalizedProfileRole === "investor" ? "investor" : "founder"
+  );
+  const isFounderRole = selectedRole === "founder";
 
   const [fullName, setFullName] = useState(initialFullName);
   const [location, setLocation] = useState(initialLocation);
@@ -104,6 +106,7 @@ export function SettingsPageClient({
     bio: initialBio.slice(0, PROFILE_BIO_MAX_LENGTH).trim(),
     profileVisible: initialProfileVisible,
     interestSectors: initialInterestSectors.filter((x) => typeof x === "string" && x.trim()),
+    role: normalizedProfileRole === "investor" ? "investor" : "founder",
   }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -125,7 +128,7 @@ export function SettingsPageClient({
 
       const full = await supabase
         .from("profiles")
-        .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, interest_sectors")
+        .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -147,6 +150,7 @@ export function SettingsPageClient({
               bio: null,
               profile_visible: true,
               interest_sectors: [] as string[],
+              role: null,
             }
           : null;
       } else if (full.error) {
@@ -172,12 +176,15 @@ export function SettingsPageClient({
       setAvatarUrl(r.avatarUrl);
       setProfileVisible(vis);
       setInterestSectors(loadedInterests);
+      const loadedRole = normalizeRole((profile as { role?: string | null } | null)?.role ?? null);
+      setSelectedRole(loadedRole === "investor" ? "investor" : "founder");
       setSavedBaseline({
         fullName: r.fullName.trim(),
         location: r.location.trim(),
         bio: bioClamped.trim(),
         profileVisible: vis,
         interestSectors: loadedInterests,
+        role: loadedRole === "investor" ? "investor" : "founder",
       });
     })();
     return () => {
@@ -351,6 +358,7 @@ export function SettingsPageClient({
         location: location.trim() || null,
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
+        role: selectedRole,
         ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
         updated_at: new Date().toISOString(),
       })
@@ -378,6 +386,7 @@ export function SettingsPageClient({
         location: location.trim() || null,
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
+        role: selectedRole,
         ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
         updated_at: new Date().toISOString(),
       });
@@ -395,6 +404,7 @@ export function SettingsPageClient({
       bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH),
       profileVisible,
       interestSectors: isFounderRole ? [...interestSectors] : b.interestSectors,
+      role: selectedRole,
     }));
     setTimeout(() => {
       setSaveState("idle");
@@ -411,8 +421,9 @@ export function SettingsPageClient({
       location.trim() !== savedBaseline.location ||
       bio.trim() !== savedBaseline.bio ||
       profileVisible !== savedBaseline.profileVisible ||
+      selectedRole !== savedBaseline.role ||
       (isFounderRole && !sameStringArray(interestSectors, savedBaseline.interestSectors)),
-    [fullName, location, bio, profileVisible, isFounderRole, interestSectors, savedBaseline]
+    [fullName, location, bio, profileVisible, selectedRole, isFounderRole, interestSectors, savedBaseline]
   );
 
   const saveDisabled = saveState === "saving" || !hasUnsavedProfileChanges;
@@ -518,6 +529,36 @@ export function SettingsPageClient({
               </p>
             </div>
             <div className="flex-1 min-w-0 space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                  Account type
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "founder" as const, label: "Creative" },
+                    { value: "investor" as const, label: "Mentor" },
+                  ].map((option) => {
+                    const active = selectedRole === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSelectedRole(option.value)}
+                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[40px] touch-manipulation ${
+                          active
+                            ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Switch between Creative and Mentor. Save changes to apply.
+                </p>
+              </div>
               <div>
                 <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
                   Full name
@@ -702,29 +743,6 @@ export function SettingsPageClient({
         </div>
 
         <EliteReachCard {...eliteReach} />
-
-        <section className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6 flex flex-col">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white mb-4 shrink-0"
-            style={{ backgroundColor: THEME.primary }}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-bold text-gray-900">Verify Identity</h3>
-          <p className="text-sm text-gray-500 mt-2 flex-1">
-            Add a government-issued ID to unlock verified badge.
-          </p>
-          <Link
-            href="#"
-            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold hover:underline touch-manipulation"
-            style={{ color: THEME.primary }}
-          >
-            Get Started
-            <span aria-hidden>→</span>
-          </Link>
-        </section>
       </div>
 
       <ChangePasswordModal

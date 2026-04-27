@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { founderCategoryKeys } from "@/lib/mentor-matching";
 
 export type ExplorePublishedProject = {
   id: string;
@@ -13,6 +14,30 @@ export type ExplorePublishedProject = {
   updated_at: string | null;
 };
 
+/** True if a project overlaps the viewer's interests / own-project sectors (case-insensitive). */
+export function exploreProjectMatchesViewerCategories(
+  project: ExplorePublishedProject,
+  viewerKeys: string[]
+): boolean {
+  if (!viewerKeys.length) return false;
+  const keysLower = viewerKeys.map((k) => k.trim().toLowerCase()).filter(Boolean);
+  if (!keysLower.length) return false;
+  const sector = (project.sector ?? "").trim().toLowerCase();
+  const sub = (project.subcategory ?? "").trim().toLowerCase();
+  for (const k of keysLower) {
+    if (sector && (sector === k || sector.includes(k) || k.includes(sector))) return true;
+    if (sub && (sub === k || sub.includes(k) || k.includes(sub))) return true;
+  }
+  for (const raw of project.discovery_tags ?? []) {
+    const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    if (!t) continue;
+    for (const k of keysLower) {
+      if (t.includes(k) || k.includes(t)) return true;
+    }
+  }
+  return false;
+}
+
 const SELECT =
   "id, creator_id, project_name, tagline, short_description, sector, subcategory, cover_image_file_name, discovery_tags, updated_at";
 
@@ -21,6 +46,28 @@ export type TrendingProject = {
   sub: string;
   followers: string;
 };
+
+/** Interests + own-project sectors for ranking “For you” on Explore (empty if logged out). */
+export async function fetchExploreViewerCategoryKeys(
+  supabase: SupabaseClient,
+  userId: string | null | undefined
+): Promise<string[]> {
+  if (!userId) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("interest_sectors")
+    .eq("id", userId)
+    .maybeSingle();
+  const raw = (profile as { interest_sectors?: unknown } | null)?.interest_sectors;
+  const interests = Array.isArray(raw)
+    ? raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  const { data: myProjects } = await supabase
+    .from("projects")
+    .select("sector, subcategory")
+    .eq("creator_id", userId);
+  return founderCategoryKeys(interests, myProjects ?? []);
+}
 
 /** Published projects from other founders (excludes current user when logged in). */
 export async function fetchExploreProjects(

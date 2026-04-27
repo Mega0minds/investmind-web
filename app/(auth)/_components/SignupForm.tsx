@@ -78,10 +78,13 @@ export function SignupForm() {
       }
 
       const supabase = createClient();
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
       const signInUrl =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/login`
-          : undefined;
+        siteUrl && /^https?:\/\//i.test(siteUrl)
+          ? `${siteUrl}/login`
+          : typeof window !== "undefined"
+            ? `${window.location.origin}/login`
+            : undefined;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,

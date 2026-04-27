@@ -2,7 +2,11 @@ import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { ExploreIdeasContent } from "@/components/explore/ExploreIdeasContent";
 import { createClient } from "@/lib/supabase/server";
-import { fetchExploreProjects, fetchTrendingProjectsByViews } from "@/lib/explore-projects";
+import {
+  fetchExploreProjects,
+  fetchExploreViewerCategoryKeys,
+  fetchTrendingProjectsByViews,
+} from "@/lib/explore-projects";
 
 export const revalidate = 60;
 
@@ -11,6 +15,8 @@ export default async function PublicExplorePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const viewerCategoryKeys = await fetchExploreViewerCategoryKeys(supabase, user?.id);
+
   const projects = await fetchExploreProjects(supabase, {
     excludeCreatorId: user?.id ?? undefined,
   });
@@ -29,7 +35,11 @@ export default async function PublicExplorePage() {
             Discover innovations from creatives across Africa. Sign up to connect and invest.
           </p>
         </div>
-        <ExploreIdeasContent projects={projects} trending={trending} />
+        <ExploreIdeasContent
+          projects={projects}
+          trending={trending}
+          viewerCategoryKeys={viewerCategoryKeys}
+        />
       </main>
       <Footer />
     </div>

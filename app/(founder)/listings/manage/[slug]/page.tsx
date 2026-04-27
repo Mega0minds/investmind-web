@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { DashboardShell } from "../../../_components/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
+import { redirectInvestorFromListingsArea } from "../../_lib/redirectInvestorFromListings";
 
 type ListingPageProps = {
   params: Promise<{ slug: string }>;
@@ -37,6 +38,7 @@ export default async function ListingDetailsPage({ params }: ListingPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await redirectInvestorFromListingsArea(supabase, user.id);
 
   const { data: project, error } = await supabase
     .from("projects")
