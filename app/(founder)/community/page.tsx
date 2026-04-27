@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -101,7 +100,6 @@ function formatRelativeTime(iso: string): string {
 
 export default function CommunityPage() {
   const supabase = useMemo(() => createClient(), []);
-  const searchParams = useSearchParams();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("You");
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState<string | null>(null);
@@ -116,7 +114,7 @@ export default function CommunityPage() {
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
-  const focusMessageId = searchParams.get("focus");
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
 
   const recentActivities = useMemo(() => {
     if (!currentUserId) return [];
@@ -274,6 +272,11 @@ export default function CommunityPage() {
       void supabase.removeChannel(channel);
     };
   }, [supabase]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setFocusMessageId(q.get("focus"));
+  }, []);
 
   useEffect(() => {
     if (!focusMessageId || loadingMessages) return;
