@@ -6,17 +6,7 @@ import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { avatarInitials } from "@/lib/user-display";
-
-const NEW_MEMBERS = [
-  { name: "Elena Rodriguez", role: "Fintech Consultant" },
-  { name: "David Kim", role: "Product Designer" },
-  { name: "Sophia Thorne", role: "Climate VC" },
-] as const;
-
-const MENTORS = [
-  { name: "Liam S.", role: "SaaS GTM" },
-  { name: "Anya S.", role: "Fundraising" },
-] as const;
+import { rolesForAudienceFilter } from "@/lib/roles";
 
 type CommunityMessageRow = {
   id: string;
@@ -69,6 +59,13 @@ type CurrentUserProfile = {
   avatar_url?: string | null;
 };
 
+type SidebarMentor = {
+  id: string;
+  name: string;
+  expertise: string;
+  avatarUrl: string | null;
+};
+
 function displayNameFromProfile(
   profile:
     | {
@@ -115,6 +112,12 @@ export default function CommunityPage() {
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
+  const [sidebarMentors, setSidebarMentors] = useState<SidebarMentor[]>([]);
+  const [requestedMentorIds, setRequestedMentorIds] = useState<string[]>([]);
+  const [selectedMentor, setSelectedMentor] = useState<SidebarMentor | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [connectingMentorId, setConnectingMentorId] = useState<string | null>(null);
 
   const recentActivities = useMemo(() => {
     if (!currentUserId) return [];
@@ -165,6 +168,73 @@ export default function CommunityPage() {
         if (active) {
           setCurrentUserName(resolvedName);
           setCurrentUserAvatarUrl(p?.avatar_url?.trim() || null);
+        }
+
+        const [{ data: mentorRows }, { data: requestRows }, { data: acceptedRows }] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("id, first_name, last_name, full_name, mentor_expertise, avatar_url")
+            .in("role", rolesForAudienceFilter("investor"))
+            .eq("profile_visible", true)
+            .neq("id", userId)
+            .limit(20),
+          supabase
+            .from("mentorship_requests")
+            .select("mentor_id")
+            .eq("requester_id", userId)
+            .in("status", ["pending", "accepted"]),
+          supabase
+            .from("mentorship_requests")
+            .select("requester_id, mentor_id")
+            .eq("status", "accepted")
+            .or(`and(requester_id.eq.${userId}),and(mentor_id.eq.${userId})`),
+        ]);
+
+        if (active) {
+          const mentors = (mentorRows ?? []) as Array<{
+            id: string;
+            first_name?: string | null;
+            last_name?: string | null;
+            full_name?: string | null;
+            mentor_expertise?: string[] | null;
+            avatar_url?: string | null;
+          }>;
+          setSidebarMentors(
+            mentors.map((m) => {
+              const firstName = m.first_name?.trim() ?? "";
+              const lastName = m.last_name?.trim() ?? "";
+              const name =
+                [firstName, lastName].filter(Boolean).join(" ").trim() ||
+                m.full_name?.trim() ||
+                "Mentor";
+              const expertise =
+                Array.isArray(m.mentor_expertise) && m.mentor_expertise.length > 0
+                  ? m.mentor_expertise.slice(0, 2).join(" · ")
+                  : "Mentor";
+              return {
+                id: m.id,
+                name,
+                expertise,
+                avatarUrl: m.avatar_url?.trim() || null,
+              };
+            }).filter((m) => {
+              const accepted = ((acceptedRows ?? []) as Array<{ requester_id?: string | null; mentor_id?: string | null }>)
+                .some((r) => {
+                  const requesterId = r.requester_id ?? null;
+                  const mentorId = r.mentor_id ?? null;
+                  return (
+                    (requesterId === userId && mentorId === m.id) ||
+                    (mentorId === userId && requesterId === m.id)
+                  );
+                });
+              return !accepted;
+            }).slice(0, 4)
+          );
+          setRequestedMentorIds(
+            ((requestRows ?? []) as Array<{ mentor_id?: string | null }>)
+              .map((r) => r.mentor_id ?? null)
+              .filter((id): id is string => Boolean(id))
+          );
         }
       }
       const { data, error } = await supabase
@@ -333,6 +403,45 @@ export default function CommunityPage() {
       setReplyDraftByMessageId((prev) => ({ ...prev, [messageId]: "" }));
     }
     setReplyingMessageId(null);
+  }
+
+  async function handleConnectMentor(mentor: SidebarMentor) {
+    setSelectedMentor(mentor);
+    setRequestMessage(`Hi ${mentor.name}, I would love to learn from your experience.`);
+    setRequestError(null);
+  }
+
+  async function submitConnectRequest() {
+    if (!selectedMentor || connectingMentorId) return;
+    const trimmed = requestMessage.trim();
+    if (trimmed.length < 5 || trimmed.length > 300) {
+      setRequestError("Message must be between 5 and 300 characters.");
+      return;
+    }
+
+    const mentor = selectedMentor;
+    if (connectingMentorId || requestedMentorIds.includes(mentor.id)) return;
+    setConnectingMentorId(mentor.id);
+    try {
+      const res = await fetch("/api/access-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mentorId: mentor.id, message: trimmed }),
+      });
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setRequestError(payload?.error || "Could not send request.");
+        return;
+      }
+      if (res.ok) {
+        setRequestedMentorIds((prev) => (prev.includes(mentor.id) ? prev : [...prev, mentor.id]));
+        setSelectedMentor(null);
+        setRequestMessage("");
+        setRequestError(null);
+      }
+    } finally {
+      setConnectingMentorId(null);
+    }
   }
 
   return (
@@ -540,67 +649,118 @@ export default function CommunityPage() {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 min-w-0">
-              <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-                <h3 className="font-bold text-gray-900 text-sm sm:text-base">New Members</h3>
-                <span className="text-[10px] sm:text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  Active Now
-                </span>
-              </div>
-              <ul className="space-y-3">
-                {NEW_MEMBERS.map((m) => (
-                  <li key={m.name} className="flex items-center justify-between gap-2 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-gray-200 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{m.role}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg shrink-0"
-                      aria-label={`Follow ${m.name}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 min-h-[44px] touch-manipulation"
-              >
-                See everyone
-              </button>
-            </div>
-
             <div className="rounded-2xl bg-sky-50 border border-sky-100 p-4 sm:p-5 min-w-0 md:col-span-2 lg:col-span-1">
               <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-4 wrap-break-word">
                 Mentors matching your profile
               </h3>
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                {MENTORS.map((m) => (
-                  <div key={m.name} className="bg-white rounded-xl border border-gray-200 p-3 text-center min-w-0">
-                    <div className="w-12 h-12 rounded-full bg-violet-200 mx-auto" />
-                    <p className="text-sm font-semibold text-gray-900 mt-2 truncate">{m.name}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 truncate">{m.role}</p>
-                    <button
-                      type="button"
-                      className="mt-2 w-full rounded-lg py-2 text-xs font-semibold text-white min-h-[40px] touch-manipulation"
-                      style={{ backgroundColor: THEME.primary }}
-                    >
-                      Connect
-                    </button>
-                  </div>
-                ))}
-              </div>
+              {sidebarMentors.length === 0 ? (
+                <p className="text-sm text-gray-500">No mentors available right now.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  {sidebarMentors.map((m) => (
+                    <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-3 text-center min-w-0">
+                      {m.avatarUrl ? (
+                        <img
+                          src={m.avatarUrl}
+                          alt={m.name}
+                          className="w-12 h-12 rounded-full object-cover mx-auto bg-violet-100"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-violet-200 text-violet-700 mx-auto flex items-center justify-center text-sm font-semibold">
+                          {avatarInitials(m.name)}
+                        </div>
+                      )}
+                      <p className="text-sm font-semibold text-gray-900 mt-2 truncate">{m.name}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 truncate">{m.expertise}</p>
+                      <button
+                        type="button"
+                        onClick={() => void handleConnectMentor(m)}
+                        disabled={requestedMentorIds.includes(m.id) || connectingMentorId === m.id}
+                        className="mt-2 w-full rounded-lg py-2 text-xs font-semibold text-white min-h-[40px] touch-manipulation disabled:opacity-60"
+                        style={{ backgroundColor: requestedMentorIds.includes(m.id) ? "#64748B" : THEME.primary }}
+                      >
+                        {requestedMentorIds.includes(m.id)
+                          ? "Requested"
+                          : connectingMentorId === m.id
+                          ? "Connecting..."
+                          : "Connect"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+      {selectedMentor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Request Connection</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Send a short note to {selectedMentor.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!connectingMentorId) {
+                    setSelectedMentor(null);
+                    setRequestError(null);
+                  }
+                }}
+                className="text-sm text-gray-400 hover:text-gray-600"
+              >
+                Close
+              </button>
+            </div>
+            <label className="mt-4 block text-sm font-medium text-gray-700" htmlFor="connect-message">
+              Message
+            </label>
+            <textarea
+              id="connect-message"
+              value={requestMessage}
+              onChange={(e) => setRequestMessage(e.target.value.slice(0, 300))}
+              rows={5}
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              placeholder="Write a short message..."
+            />
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {requestError ? <span className="text-red-600">{requestError}</span> : "Keep it short and clear."}
+              </span>
+              <span>{requestMessage.trim().length}/300</span>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!connectingMentorId) {
+                    setSelectedMentor(null);
+                    setRequestError(null);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitConnectRequest()}
+                disabled={connectingMentorId === selectedMentor.id}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                {connectingMentorId === selectedMentor.id ? "Sending..." : "Send request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardShell>
   );
 }

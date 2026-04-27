@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { THEME } from "@/lib/constants";
+import { createClient } from "@/lib/supabase/client";
 import {
   exploreProjectMatchesViewerCategories,
   type ExplorePublishedProject,
@@ -43,9 +44,17 @@ function byRecentUpdated(a: ExplorePublishedProject, b: ExplorePublishedProject)
 function ExploreProjectCard({
   item,
   badgeIndex,
+  canConnect,
+  hasRequested,
+  connecting,
+  onConnect,
 }: {
   item: ExplorePublishedProject;
   badgeIndex: number;
+  canConnect: boolean;
+  hasRequested: boolean;
+  connecting: boolean;
+  onConnect: (project: ExplorePublishedProject) => void;
 }) {
   const title = item.project_name?.trim() || "Untitled project";
   const desc =
@@ -134,13 +143,25 @@ function ExploreProjectCard({
             >
               Details
             </Link>
-            <Link
-              href="/signup"
-              className="rounded-lg px-3 py-2.5 sm:py-2 text-xs font-semibold text-white transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto hover:opacity-90"
-              style={{ backgroundColor: THEME.primary }}
-            >
-              Connect
-            </Link>
+            {canConnect ? (
+              <button
+                type="button"
+                onClick={() => onConnect(item)}
+                disabled={hasRequested || connecting}
+                className="rounded-lg px-3 py-2.5 sm:py-2 text-xs font-semibold text-white transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: hasRequested ? "#64748B" : THEME.primary }}
+              >
+                {hasRequested ? "Requested" : connecting ? "Sending..." : "Connect"}
+              </button>
+            ) : (
+              <Link
+                href="/signup"
+                className="rounded-lg px-3 py-2.5 sm:py-2 text-xs font-semibold text-white transition text-center min-h-[44px] sm:min-h-0 inline-flex items-center justify-center touch-manipulation w-full sm:w-auto hover:opacity-90"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                Connect
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -158,7 +179,43 @@ export function ExploreIdeasContent({
   /** Logged-in viewer: interests + sectors from their own projects; used to rank “For you” first. */
   viewerCategoryKeys?: string[];
 }) {
+  const supabase = useMemo(() => createClient(), []);
   const [activeChip, setActiveChip] = useState<(typeof CATEGORY_CHIPS)[number]["key"]>("all");
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [requestedProjectIds, setRequestedProjectIds] = useState<Set<string>>(new Set());
+  const [selectedProject, setSelectedProject] = useState<ExplorePublishedProject | null>(null);
+  const [connectMessage, setConnectMessage] = useState("");
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectingProjectId, setConnectingProjectId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!active) return;
+      const uid = user?.id ?? null;
+      setViewerId(uid);
+      if (!uid) return;
+      const { data } = await supabase
+        .from("project_connection_requests")
+        .select("project_id")
+        .eq("requester_id", uid)
+        .in("status", ["connecting", "accepted"]);
+      if (!active) return;
+      setRequestedProjectIds(
+        new Set(
+          ((data ?? []) as Array<{ project_id?: string | null }>)
+            .map((r) => r.project_id ?? null)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+    })();
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   const chipFiltered = useMemo(() => {
     if (activeChip === "all") return projects;
@@ -201,6 +258,33 @@ export function ExploreIdeasContent({
       showNoOutsideMatches: related.length > 0 && other.length === 0,
     };
   }, [chipFiltered, viewerCategoryKeys]);
+
+  async function submitConnectRequest() {
+    if (!selectedProject || !viewerId || connectingProjectId) return;
+    const message = connectMessage.trim();
+    if (message.length < 5 || message.length > 300) {
+      setConnectError("Message must be between 5 and 300 characters.");
+      return;
+    }
+    setConnectError(null);
+    setConnectingProjectId(selectedProject.id);
+    const { error } = await supabase.from("project_connection_requests").insert({
+      requester_id: viewerId,
+      project_id: selectedProject.id,
+      creator_id: selectedProject.creator_id,
+      message,
+      status: "connecting",
+    });
+    if (error) {
+      setConnectError(error.message || "Could not send connection request.");
+      setConnectingProjectId(null);
+      return;
+    }
+    setRequestedProjectIds((prev) => new Set([...prev, selectedProject.id]));
+    setConnectingProjectId(null);
+    setSelectedProject(null);
+    setConnectMessage("");
+  }
 
   return (
     <div className="min-w-0 w-full max-w-full overflow-x-hidden">
@@ -256,7 +340,21 @@ export function ExploreIdeasContent({
                   </div>
                 )}
                 {relatedProjects.map((item, i) => (
-                  <ExploreProjectCard key={item.id} item={item} badgeIndex={i} />
+                  <ExploreProjectCard
+                    key={item.id}
+                    item={item}
+                    badgeIndex={i}
+                    canConnect={Boolean(viewerId)}
+                    hasRequested={requestedProjectIds.has(item.id)}
+                    connecting={connectingProjectId === item.id}
+                    onConnect={(project) => {
+                      setSelectedProject(project);
+                      setConnectMessage(
+                        `Hi, I’m interested in your project "${project.project_name?.trim() || "this project"}". I would love to connect.`
+                      );
+                      setConnectError(null);
+                    }}
+                  />
                 ))}
                 {showOutsideHeading && (
                   <div className="sm:col-span-2 mt-6 pt-4 border-t border-gray-200">
@@ -279,6 +377,16 @@ export function ExploreIdeasContent({
                     key={item.id}
                     item={item}
                     badgeIndex={relatedProjects.length + i}
+                    canConnect={Boolean(viewerId)}
+                    hasRequested={requestedProjectIds.has(item.id)}
+                    connecting={connectingProjectId === item.id}
+                    onConnect={(project) => {
+                      setSelectedProject(project);
+                      setConnectMessage(
+                        `Hi, I’m interested in your project "${project.project_name?.trim() || "this project"}". I would love to connect.`
+                      );
+                      setConnectError(null);
+                    }}
                   />
                 ))}
               </>
@@ -286,17 +394,10 @@ export function ExploreIdeasContent({
           </div>
         </div>
 
-        <div className="lg:col-span-4 min-w-0 order-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-4">
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 min-w-0">
+        <div className="lg:col-span-4 min-w-0 order-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-4 content-start">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 min-w-0 h-fit self-start">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
               <h3 className="font-bold text-gray-900 text-sm sm:text-base">Trending Now</h3>
-              <Link
-                href="#"
-                className="text-xs sm:text-sm font-semibold hover:underline shrink-0"
-                style={{ color: THEME.primary }}
-              >
-                View All Trending
-              </Link>
             </div>
 
             <div className="space-y-3 sm:space-y-4">
@@ -329,6 +430,72 @@ export function ExploreIdeasContent({
 
         </div>
       </div>
+      {selectedProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Connect on Project</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Send a message about {selectedProject.project_name?.trim() || "this project"}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!connectingProjectId) {
+                    setSelectedProject(null);
+                    setConnectError(null);
+                  }
+                }}
+                className="text-sm text-gray-400 hover:text-gray-600"
+              >
+                Close
+              </button>
+            </div>
+            <label className="mt-4 block text-sm font-medium text-gray-700" htmlFor="project-connect-message">
+              Message
+            </label>
+            <textarea
+              id="project-connect-message"
+              value={connectMessage}
+              onChange={(e) => setConnectMessage(e.target.value.slice(0, 300))}
+              rows={5}
+              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+              placeholder="Write a short message..."
+            />
+            <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {connectError ? <span className="text-red-600">{connectError}</span> : "Keep it short and clear."}
+              </span>
+              <span>{connectMessage.trim().length}/300</span>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!connectingProjectId) {
+                    setSelectedProject(null);
+                    setConnectError(null);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitConnectRequest()}
+                disabled={connectingProjectId === selectedProject.id}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: THEME.primary }}
+              >
+                {connectingProjectId === selectedProject.id ? "Sending..." : "Send request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

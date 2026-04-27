@@ -150,6 +150,7 @@ export function UploadProjectWizard() {
   const [screenshotPreviewUrls, setScreenshotPreviewUrls] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<"draft" | "save" | "publish" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastPersistedComparableDraft, setLastPersistedComparableDraft] = useState<string | null>(null);
   const saveTimer = useRef<number | null>(null);
@@ -240,6 +241,7 @@ export function UploadProjectWizard() {
               subcategory?: string;
             };
             const { subcategory: _legacySub, ...parsed } = parsedRaw;
+            void _legacySub;
             const parsedLegacy = parsed as Partial<UploadDraft> & {
               step?: WizardStep;
               pitchDeckFileName?: string;
@@ -409,21 +411,26 @@ export function UploadProjectWizard() {
   async function handleAddToDraft() {
     if (!userId) return;
     setSaveError(null);
+    setLoadingAction("draft");
     setLoading(true);
     try {
       const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
       localStorage.setItem(storageKey, JSON.stringify(draft));
       const result = await saveToBackend("draft");
-      if (result.ok) void router.refresh();
-      else setSaveError(result.error);
+      if (result.ok) {
+        router.push("/listings");
+        void router.refresh();
+      } else setSaveError(result.error);
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
   }
 
   async function handleSavePublished() {
     if (!userId) return;
     setSaveError(null);
+    setLoadingAction("save");
     setLoading(true);
     try {
       const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
@@ -436,6 +443,7 @@ export function UploadProjectWizard() {
       } else setSaveError(result.error);
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
   }
 
@@ -544,6 +552,7 @@ export function UploadProjectWizard() {
     if (!isFullyValid) return;
     if (!userId) return;
     setSaveError(null);
+    setLoadingAction("publish");
     setLoading(true);
     try {
       const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
@@ -565,6 +574,7 @@ export function UploadProjectWizard() {
       setShowSubmitSuccessModal(true);
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
   }
 
@@ -599,6 +609,9 @@ export function UploadProjectWizard() {
   const goToStep = (next: WizardStep) => {
     setDraft((d) => ({ ...d, step: next }));
     router.replace(listingsNewHref(next));
+  };
+  const goBackToProjects = () => {
+    router.push("/listings");
   };
 
   useEffect(() => {
@@ -1112,7 +1125,11 @@ export function UploadProjectWizard() {
               <label className="block text-sm font-semibold text-gray-700 mb-1">Team size</label>
               <input
                 value={draft.teamSize}
-                onChange={(e) => setDraft((d) => ({ ...d, teamSize: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, teamSize: e.target.value.replace(/\D+/g, "") }))
+                }
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/30"
                 placeholder="e.g. 5, 10, 25"
               />
@@ -1138,13 +1155,26 @@ export function UploadProjectWizard() {
 
           {draft.step < 5 ? (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {isEditMode && (
+                <button
+                  type="button"
+                  onClick={goBackToProjects}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 touch-manipulation"
+                >
+                  Back to projects
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void (isPublished ? handleSavePublished() : handleAddToDraft())}
                 disabled={loading || mediaUploading || !userId || (isPublished && !hasPublishedChanges)}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation disabled:opacity-60"
               >
-                {loading ? "Saving…" : isPublished ? "Save" : "Add to draft"}
+                {loadingAction === "draft" || loadingAction === "save"
+                  ? "Saving…"
+                  : isPublished
+                  ? "Save"
+                  : "Add to draft"}
               </button>
               <button
                 type="button"
@@ -1158,6 +1188,15 @@ export function UploadProjectWizard() {
             </div>
           ) : isPublished ? (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {isEditMode && (
+                <button
+                  type="button"
+                  onClick={goBackToProjects}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 touch-manipulation"
+                >
+                  Back to projects
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleSavePublished()}
@@ -1165,18 +1204,27 @@ export function UploadProjectWizard() {
                 className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 touch-manipulation disabled:opacity-60"
                 style={{ backgroundColor: THEME.primary }}
               >
-                {loading ? "Saving…" : "Save"}
+                {loadingAction === "save" ? "Saving…" : "Save"}
               </button>
             </div>
           ) : (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              {isEditMode && (
+                <button
+                  type="button"
+                  onClick={goBackToProjects}
+                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 touch-manipulation"
+                >
+                  Back to projects
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleAddToDraft()}
                 disabled={loading || mediaUploading || !userId}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation disabled:opacity-60"
               >
-                {loading ? "Saving…" : "Add to draft"}
+                {loadingAction === "draft" ? "Saving…" : "Add to draft"}
               </button>
               <button
                 type="button"
@@ -1185,7 +1233,7 @@ export function UploadProjectWizard() {
                 className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 touch-manipulation disabled:opacity-60"
                 style={{ backgroundColor: THEME.primary }}
               >
-                {loading ? "Publishing…" : "Publish"}
+                {loadingAction === "publish" ? "Publishing…" : "Publish"}
               </button>
             </div>
           )}

@@ -28,7 +28,6 @@ type StatCard = {
 const DASHBOARD_PROJECT_LIMIT = 2;
 const DASHBOARD_EXPLORE_LIMIT = 6;
 const DASHBOARD_MENTOR_LIMIT = 4;
-const DASHBOARD_CACHE_TTL_MS = 30_000;
 
 type DashboardProjectRow = {
   id: string;
@@ -68,11 +67,8 @@ type DashboardCachedPayload = {
   exploreHint: string | null;
   /** Mentors (investor role) should not see founder project UI on the dashboard. */
   hideMyProjectsSection: boolean;
+  isFounderLike: boolean;
 };
-
-const DASHBOARD_CACHE_KEY_SUFFIX = ":v2";
-
-const dashboardCache = new Map<string, { expiresAt: number; payload: DashboardCachedPayload }>();
 
 export function DashboardWelcome() {
   const [firstName, setFirstName] = useState<string>("there");
@@ -91,6 +87,7 @@ export function DashboardWelcome() {
   const [exploreLoading, setExploreLoading] = useState(true);
   const [exploreHint, setExploreHint] = useState<string | null>(null);
   const [hideMyProjectsSection, setHideMyProjectsSection] = useState(false);
+  const [isFounderLikeView, setIsFounderLikeView] = useState(true);
   const [selectedMentor, setSelectedMentor] = useState<RecommendedMentor | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -116,6 +113,7 @@ export function DashboardWelcome() {
       setExploreIdeas(payload.exploreIdeas);
       setExploreHint(payload.exploreHint);
       setHideMyProjectsSection(payload.hideMyProjectsSection);
+      setIsFounderLikeView(payload.isFounderLike);
       setProjectsLoading(false);
       setMentorsLoading(false);
       setExploreLoading(false);
@@ -133,12 +131,6 @@ export function DashboardWelcome() {
         return;
       }
 
-      const cached = dashboardCache.get(user.id + DASHBOARD_CACHE_KEY_SUFFIX);
-      const now = Date.now();
-      if (cached && cached.expiresAt > now && !cancelled) {
-        applyPayload(cached.payload);
-      }
-
       const profileRes = await supabase
         .from("profiles")
         .select("first_name, role, interest_sectors, mentor_expertise")
@@ -151,6 +143,19 @@ export function DashboardWelcome() {
         setHideMyProjectsSection(true);
         setProjectsLoading(false);
       }
+
+      const profile = profileRes.data as
+        | {
+            first_name?: string | null;
+            role?: string | null;
+            interest_sectors?: unknown;
+            mentor_expertise?: unknown;
+          }
+        | null;
+      const first = profile?.first_name?.trim() || "there";
+      const normalized = normalizeRole(profile?.role ?? null);
+      const isFounderLike = normalized === "founder";
+      const hideProjectsUi = normalized === "investor";
 
       const [
         ideasCountRes,
@@ -177,8 +182,8 @@ export function DashboardWelcome() {
           .eq("creator_id", user.id),
         supabase
           .from("profiles")
-          .select("id, first_name, last_name, full_name, mentor_expertise")
-          .in("role", rolesForAudienceFilter("investor"))
+          .select("id, first_name, last_name, full_name, mentor_expertise, interest_sectors")
+          .in("role", rolesForAudienceFilter(isFounderLike ? "investor" : "founder"))
           .eq("profile_visible", true)
           .neq("id", user.id)
           .limit(40),
@@ -197,19 +202,6 @@ export function DashboardWelcome() {
           .order("updated_at", { ascending: false })
           .limit(60),
       ]);
-
-      const profile = profileRes.data as
-        | {
-            first_name?: string | null;
-            role?: string | null;
-            interest_sectors?: unknown;
-            mentor_expertise?: unknown;
-          }
-        | null;
-      const first = profile?.first_name?.trim() || "there";
-      const normalized = normalizeRole(profile?.role ?? null);
-      const isFounderLike = normalized === "founder";
-      const hideProjectsUi = normalized === "investor";
 
       const statsRequestsRes = isFounderLike
         ? await supabase
@@ -289,7 +281,7 @@ export function DashboardWelcome() {
       const myProjectCategories = projectCategoriesRes.error ? [] : (projectCategoriesRes.data ?? []);
       const founderKeys = founderCategoryKeys(interestRaw, myProjectCategories);
       const mentorExpertiseRaw = Array.isArray(profile?.mentor_expertise)
-        ? (profile.mentor_expertise as unknown[]).filter(
+        ? ((profile?.mentor_expertise ?? []) as unknown[]).filter(
             (x): x is string => typeof x === "string" && x.trim().length > 0
           )
         : [];
@@ -317,34 +309,80 @@ export function DashboardWelcome() {
         mentors = [];
         mentorsHint = mentorRowsRes.error
           ? null
-          : "No mentor profiles yet. Mentors appear here when they join with matching expertise.";
+          : isFounderLike
+            ? "No mentor profiles yet. Mentors appear here when they join with matching expertise."
+            : "No creative profiles yet.";
       } else {
-        const rows = mentorRowsRes.data as MentorProfileRow[];
-        const scored = rows
-          .map((m) => ({ m, score: mentorOverlapScore(m.mentor_expertise, founderKeys) }))
-          .filter((x) => x.score > 0)
-          .sort((a, b) => b.score - a.score);
-        let list = scored;
-        if (!list.length && founderKeys.length && rows.length) {
-          mentorsHint = "No mentors listed in your sectors yet. Try more interests in Settings.";
-          list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
-        } else if (!list.length && !founderKeys.length && rows.length) {
-          mentorsHint =
-            "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories.";
-          list = rows.slice(0, 5).map((m) => ({ m, score: 0 }));
-        }
-        mentors = list
-          .filter(({ m }) => !requestedMentorIdSet.has(m.id))
-          .slice(0, DASHBOARD_MENTOR_LIMIT)
-          .map(({ m }) => {
-            const name = mentorDisplayName(m);
+        const rows = mentorRowsRes.data as Array<{
+          id: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          full_name?: string | null;
+          mentor_expertise?: string[] | null;
+          interest_sectors?: string[] | null;
+        }>;
+
+        if (isFounderLike) {
+          const mentorRows = rows as MentorProfileRow[];
+          const scored = mentorRows
+            .map((m) => ({ m, score: mentorOverlapScore(m.mentor_expertise, founderKeys) }))
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score);
+          let list = scored;
+          if (!list.length && founderKeys.length && mentorRows.length) {
+            mentorsHint = "No mentors listed in your sectors yet. Try more interests in Settings.";
+            list = mentorRows.slice(0, 5).map((m) => ({ m, score: 0 }));
+          } else if (!list.length && !founderKeys.length && mentorRows.length) {
+            mentorsHint =
+              "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories.";
+            list = mentorRows.slice(0, 5).map((m) => ({ m, score: 0 }));
+          }
+          mentors = list
+            .filter(({ m }) => !requestedMentorIdSet.has(m.id))
+            .slice(0, DASHBOARD_MENTOR_LIMIT)
+            .map(({ m }) => {
+              const name = mentorDisplayName(m);
+              return {
+                id: m.id,
+                name,
+                role: mentorExpertiseLabel(m, founderKeys),
+                initials: initialsFromMentorName(name),
+              };
+            });
+        } else {
+          const mentorKeySet = new Set(mentorExpertiseRaw.map((x) => x.trim().toLowerCase()));
+          const scored = rows
+            .map((p) => {
+              const interests = Array.isArray(p.interest_sectors)
+                ? p.interest_sectors.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+                : [];
+              const score = interests.reduce(
+                (n, s) => n + (mentorKeySet.has(s.trim().toLowerCase()) ? 1 : 0),
+                0
+              );
+              return { p, score, interests };
+            })
+            .sort((a, b) => b.score - a.score);
+          if (!mentorKeySet.size) {
+            mentorsHint = "Add your expertise in Settings to better match creatives.";
+          } else if (scored.length > 0 && scored[0].score === 0) {
+            mentorsHint = "No close creative matches yet. Showing recent creatives.";
+          }
+          mentors = scored.slice(0, DASHBOARD_MENTOR_LIMIT).map(({ p, interests }) => {
+            const name = mentorDisplayName({
+              id: p.id,
+              first_name: p.first_name,
+              last_name: p.last_name,
+              full_name: p.full_name,
+            });
             return {
-              id: m.id,
+              id: p.id,
               name,
-              role: mentorExpertiseLabel(m, founderKeys),
+              role: interests.length ? interests.slice(0, 2).join(" · ") : "Creative",
               initials: initialsFromMentorName(name),
             };
           });
+        }
       }
 
       let exploreIdeas: DashboardExploreIdeaRow[] = [];
@@ -394,12 +432,8 @@ export function DashboardWelcome() {
         exploreIdeas,
         exploreHint,
         hideMyProjectsSection: hideProjectsUi,
+        isFounderLike,
       };
-      dashboardCache.set(user.id + DASHBOARD_CACHE_KEY_SUFFIX, {
-        payload,
-        expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-      });
-
       if (!cancelled) {
         applyPayload(payload);
       }
@@ -451,7 +485,9 @@ export function DashboardWelcome() {
   const mentorsSection = (
     <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
       <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Recommended Mentors</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+          {isFounderLikeView ? "Recommended Mentors" : "Recommended Creatives"}
+        </h3>
         <Link
           href="/mentorship"
           className="text-xs sm:text-sm font-medium hover:underline shrink-0"
@@ -465,7 +501,9 @@ export function DashboardWelcome() {
         <p className="text-sm text-gray-500">Loading mentors…</p>
       ) : mentors.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No matches yet. Add sectors in Settings or publish a project to see mentors in your space.
+          {isFounderLikeView
+            ? "No matches yet. Add sectors in Settings or publish a project to see mentors in your space."
+            : "No creative matches yet. Add your expertise in Settings to improve recommendations."}
         </p>
       ) : (
         <ul className="space-y-3 sm:space-y-4">
@@ -483,13 +521,21 @@ export function DashboardWelcome() {
                   <p className="text-xs sm:text-sm text-gray-500 truncate">{m.role}</p>
                 </div>
               </Link>
-              {requestedMentorSet.has(m.id) ? (
+              {isFounderLikeView && requestedMentorSet.has(m.id) ? (
                 <span
                   className="rounded-full bg-purple-50 px-3 py-1 text-xs sm:text-sm font-medium shrink-0"
                   style={{ color: THEME.primary }}
                 >
                   Requested
                 </span>
+              ) : !isFounderLikeView ? (
+                <Link
+                  href="/explore-ideas"
+                  className="text-xs sm:text-sm font-medium hover:underline shrink-0"
+                  style={{ color: THEME.primary }}
+                >
+                  View Ideas
+                </Link>
               ) : (
                 <button
                   type="button"
@@ -511,25 +557,33 @@ export function DashboardWelcome() {
     </section>
   );
 
+  const isInvestorView = hideMyProjectsSection;
+
   return (
     <div className="space-y-6 sm:space-y-8 w-full min-w-0 max-w-full">
       {/* Welcome + CTAs */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Welcome back, {firstName} 👋</h2>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Your innovative ideas are bridging gaps across the continent.</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
+            {isInvestorView
+              ? "Discover promising projects and support founders with your expertise."
+              : "Your innovative ideas are bridging gaps across the continent."}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Link
-            href="/listings/new"
-            className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:opacity-90 whitespace-nowrap"
-            style={{ backgroundColor: THEME.primary }}
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Upload New Idea
-          </Link>
+          {!isInvestorView && (
+            <Link
+              href="/listings/new"
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:opacity-90 whitespace-nowrap"
+              style={{ backgroundColor: THEME.primary }}
+            >
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Upload New Idea
+            </Link>
+          )}
           <Link
             href="/explore-ideas"
             className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border border-gray-200 bg-white px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 whitespace-nowrap"
@@ -541,13 +595,13 @@ export function DashboardWelcome() {
             Explore Ideas
           </Link>
           <Link
-            href="/mentorship"
+            href={isInvestorView ? "/community" : "/mentorship"}
             className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border border-gray-200 bg-white px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 whitespace-nowrap"
           >
             <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Find Mentors
+            {isInvestorView ? "Community" : "Find Mentors"}
           </Link>
         </div>
       </div>
@@ -792,7 +846,7 @@ export function DashboardWelcome() {
         {/* Right: Recommended Mentors */}
         <div className="hidden lg:block space-y-4 sm:space-y-6 min-w-0">{mentorsSection}</div>
       </div>
-      {selectedMentor && (
+      {isFounderLikeView && selectedMentor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">

@@ -1,6 +1,6 @@
 import { DashboardShell } from "../_components/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeRole } from "@/lib/roles";
+import { normalizeRole, rolesForAudienceFilter } from "@/lib/roles";
 import { RecordProfileView } from "@/components/RecordProfileView";
 
 type MentorshipPageProps = {
@@ -10,16 +10,76 @@ type MentorshipPageProps = {
 export default async function MentorshipPage({ searchParams }: MentorshipPageProps) {
   const params = searchParams ? await searchParams : {};
   const mentorId = params?.mentor?.trim() || "";
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!mentorId) {
+    const { data: mentors } = await supabase
+      .from("profiles")
+      .select("id, full_name, first_name, last_name, bio, location, role, mentor_expertise, profile_visible")
+      .in("role", rolesForAudienceFilter("investor"))
+      .eq("profile_visible", true)
+      .neq("id", user?.id ?? "")
+      .order("updated_at", { ascending: false })
+      .limit(100);
+
     return (
       <DashboardShell title="Mentorship Hub">
-        <p className="text-gray-600">Pick a mentor from your dashboard to view their profile.</p>
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900">All Mentors</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Browse mentors and open a profile to view full details.
+          </p>
+          {!mentors?.length ? (
+            <p className="mt-4 text-sm text-gray-600">No visible mentors found right now.</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {mentors.map((mentor) => {
+                const name =
+                  mentor.full_name?.trim() ||
+                  [mentor.first_name, mentor.last_name].filter(Boolean).join(" ").trim() ||
+                  "Mentor";
+                const expertise = Array.isArray(mentor.mentor_expertise)
+                  ? mentor.mentor_expertise.filter(
+                      (item): item is string => typeof item === "string" && item.trim().length > 0
+                    )
+                  : [];
+                return (
+                  <a
+                    key={mentor.id}
+                    href={`/mentorship?mentor=${encodeURIComponent(mentor.id)}`}
+                    className="block rounded-xl border border-gray-200 bg-gray-50 p-4 hover:bg-white hover:shadow-sm transition"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 text-sm font-semibold text-purple-700 shrink-0">
+                        {name
+                          .split(" ")
+                          .map((part: string) => part[0] ?? "")
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{name}</p>
+                        <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                          {expertise.length ? expertise.slice(0, 2).join(" · ") : "Mentor"}
+                        </p>
+                        {mentor.location ? (
+                          <p className="mt-1 text-xs text-gray-500 truncate">{mentor.location}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </DashboardShell>
     );
   }
-
-  const supabase = await createClient();
   const { data: mentor } = await supabase
     .from("profiles")
     .select(
