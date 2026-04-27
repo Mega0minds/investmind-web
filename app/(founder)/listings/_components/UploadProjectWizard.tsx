@@ -31,6 +31,8 @@ type UploadDraft = {
   teamSize: string;
 };
 
+type ComparableDraft = Omit<UploadDraft, "step">;
+
 const DRAFT_STORAGE_PREFIX = "uploadWizardDraft";
 
 const STEPS: Array<{ title: string; id: WizardStep }> = [
@@ -62,6 +64,23 @@ function getDefaultDraft(step: WizardStep = 1): UploadDraft {
     market: "",
     pitchSummary: "",
     teamSize: "",
+  };
+}
+
+function getComparableDraft(draft: UploadDraft): ComparableDraft {
+  return {
+    projectName: draft.projectName,
+    tagline: draft.tagline,
+    shortDescription: draft.shortDescription,
+    sector: draft.sector,
+    stage: draft.stage,
+    coverImageFileName: draft.coverImageFileName,
+    screenshotFileNames: draft.screenshotFileNames,
+    productVideoUrl: draft.productVideoUrl,
+    discoveryTags: draft.discoveryTags,
+    market: draft.market,
+    pitchSummary: draft.pitchSummary,
+    teamSize: draft.teamSize,
   };
 }
 
@@ -132,6 +151,7 @@ export function UploadProjectWizard() {
 
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastPersistedComparableDraft, setLastPersistedComparableDraft] = useState<string | null>(null);
   const saveTimer = useRef<number | null>(null);
 
   // Load user + role + existing draft (if any).
@@ -191,7 +211,7 @@ export function UploadProjectWizard() {
           setListingStatus(st);
           const requestedStep = stepParam ? clampStep(stepParam) : clampStep(d.step ?? 1);
           setListingId(d.id);
-          setDraft({
+          const loadedDraft: UploadDraft = {
             step: requestedStep,
             projectName: d.project_name ?? "",
             tagline: d.tagline ?? "",
@@ -205,7 +225,9 @@ export function UploadProjectWizard() {
             market: d.market ?? "",
             pitchSummary: d.pitch_summary ?? "",
             teamSize: d.team_size ?? "",
-          });
+          };
+          setDraft(loadedDraft);
+          setLastPersistedComparableDraft(JSON.stringify(getComparableDraft(loadedDraft)));
           return;
         }
 
@@ -282,7 +304,7 @@ export function UploadProjectWizard() {
         setListingStatus(st);
         const requestedStep = stepParam ? clampStep(stepParam) : clampStep(d.step ?? 1);
         setListingId(d.id);
-        setDraft({
+        const loadedDraft: UploadDraft = {
           step: requestedStep,
           projectName: d.project_name ?? "",
           tagline: d.tagline ?? "",
@@ -296,7 +318,9 @@ export function UploadProjectWizard() {
           market: d.market ?? "",
           pitchSummary: d.pitch_summary ?? "",
           teamSize: d.team_size ?? "",
-        });
+        };
+        setDraft(loadedDraft);
+        setLastPersistedComparableDraft(JSON.stringify(getComparableDraft(loadedDraft)));
       } catch {
         // fallback to local draft only
       }
@@ -405,8 +429,11 @@ export function UploadProjectWizard() {
       const storageKey = `${DRAFT_STORAGE_PREFIX}:${userId}`;
       localStorage.setItem(storageKey, JSON.stringify(draft));
       const result = await saveToBackend("published");
-      if (result.ok) void router.refresh();
-      else setSaveError(result.error);
+      if (result.ok) {
+        setLastPersistedComparableDraft(JSON.stringify(getComparableDraft(draft)));
+        router.push("/listings");
+        void router.refresh();
+      } else setSaveError(result.error);
     } finally {
       setLoading(false);
     }
@@ -566,6 +593,9 @@ export function UploadProjectWizard() {
       : "Pitch summary and team size are required.";
   const isEditMode = Boolean(listingId);
   const isPublished = listingStatus === "published";
+  const hasPublishedChanges =
+    lastPersistedComparableDraft !== null &&
+    JSON.stringify(getComparableDraft(draft)) !== lastPersistedComparableDraft;
   const goToStep = (next: WizardStep) => {
     setDraft((d) => ({ ...d, step: next }));
     router.replace(listingsNewHref(next));
@@ -1111,7 +1141,7 @@ export function UploadProjectWizard() {
               <button
                 type="button"
                 onClick={() => void (isPublished ? handleSavePublished() : handleAddToDraft())}
-                disabled={loading || mediaUploading || !userId}
+                disabled={loading || mediaUploading || !userId || (isPublished && !hasPublishedChanges)}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-[#5A2D8F] bg-[#EFE7FC] hover:opacity-90 touch-manipulation disabled:opacity-60"
               >
                 {loading ? "Saving…" : isPublished ? "Save" : "Add to draft"}
@@ -1131,7 +1161,7 @@ export function UploadProjectWizard() {
               <button
                 type="button"
                 onClick={() => void handleSavePublished()}
-                disabled={loading || mediaUploading || !userId}
+                disabled={loading || mediaUploading || !userId || !hasPublishedChanges}
                 className="rounded-xl px-5 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:opacity-90 touch-manipulation disabled:opacity-60"
                 style={{ backgroundColor: THEME.primary }}
               >

@@ -141,7 +141,7 @@ export function DashboardWelcome() {
 
       const profileRes = await supabase
         .from("profiles")
-        .select("first_name, role, interest_sectors")
+        .select("first_name, role, interest_sectors, mentor_expertise")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -199,7 +199,12 @@ export function DashboardWelcome() {
       ]);
 
       const profile = profileRes.data as
-        | { first_name?: string | null; role?: string | null; interest_sectors?: unknown }
+        | {
+            first_name?: string | null;
+            role?: string | null;
+            interest_sectors?: unknown;
+            mentor_expertise?: unknown;
+          }
         | null;
       const first = profile?.first_name?.trim() || "there";
       const normalized = normalizeRole(profile?.role ?? null);
@@ -283,6 +288,16 @@ export function DashboardWelcome() {
             );
       const myProjectCategories = projectCategoriesRes.error ? [] : (projectCategoriesRes.data ?? []);
       const founderKeys = founderCategoryKeys(interestRaw, myProjectCategories);
+      const mentorExpertiseRaw = Array.isArray(profile?.mentor_expertise)
+        ? (profile.mentor_expertise as unknown[]).filter(
+            (x): x is string => typeof x === "string" && x.trim().length > 0
+          )
+        : [];
+      const exploreCategoryKeys = isFounderLike
+        ? founderKeys
+        : mentorExpertiseRaw.length
+          ? mentorExpertiseRaw
+          : interestRaw;
       const requestedMentorIds = mentorshipRequestsRes.error
         ? []
         : Array.isArray(mentorshipRequestsRes.data)
@@ -334,22 +349,24 @@ export function DashboardWelcome() {
 
       let exploreIdeas: DashboardExploreIdeaRow[] = [];
       let exploreHint: string | null = null;
-      const founderKeySet = new Set(founderKeys.map((x) => x.toLowerCase()));
+      const exploreKeySet = new Set(exploreCategoryKeys.map((x) => x.toLowerCase()));
       const allExploreRows = exploreProjectsRes.error ? [] : ((exploreProjectsRes.data ?? []) as DashboardExploreIdeaRow[]);
 
-      if (!founderKeySet.size) {
+      if (!allExploreRows.length) {
         exploreIdeas = [];
-        exploreHint = "Add sectors in Settings or create a project so we can match ideas for you.";
-      } else if (!allExploreRows.length) {
-        exploreIdeas = [];
-        exploreHint = "No matching published ideas yet.";
+        exploreHint = "No published ideas yet.";
+      } else if (!exploreKeySet.size) {
+        exploreIdeas = allExploreRows.slice(0, DASHBOARD_EXPLORE_LIMIT);
+        exploreHint = isFounderLike
+          ? "Add sectors in Settings or create a project so we can match ideas for you."
+          : "Showing recent published ideas. Add expertise in Settings to get better matches.";
       } else {
         const scored = allExploreRows
           .map((idea) => {
             const keys = [idea.sector, idea.subcategory]
               .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
               .map((v) => v.trim().toLowerCase());
-            const score = keys.reduce((acc, k) => acc + (founderKeySet.has(k) ? 1 : 0), 0);
+            const score = keys.reduce((acc, k) => acc + (exploreKeySet.has(k) ? 1 : 0), 0);
             return { idea, score };
           })
           .filter((x) => x.score > 0)

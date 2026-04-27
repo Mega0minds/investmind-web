@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
 import { normalizeRole, type CanonicalRole } from "@/lib/roles";
+import { avatarInitials } from "@/lib/user-display";
 
 const SIDEBAR_ID = "dashboard-sidebar";
 
@@ -240,7 +241,7 @@ export function DashboardShell({
             }}
           >
             <div className="w-10 h-10 rounded-full bg-[#E0E7FF] flex items-center justify-center text-sm font-semibold text-[#3730A3] shrink-0">
-              {userDisplay.slice(0, 2).toUpperCase()}
+              {avatarInitials(userDisplay)}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{userDisplay}</p>
@@ -321,7 +322,7 @@ export function DashboardShell({
                 }}
               >
                 <div className="w-9 h-9 rounded-full bg-[#E0E7FF] flex items-center justify-center text-sm font-semibold text-[#3730A3]">
-                  {userDisplay.slice(0, 2).toUpperCase()}
+                  {avatarInitials(userDisplay)}
                 </div>
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white pointer-events-none" aria-hidden />
               </button>
