@@ -468,13 +468,15 @@ export function UploadProjectWizard() {
       setMediaError("Your account is still loading. Please wait a second and try again.");
       return null;
     }
-    console.log("[UploadProjectWizard] uploading file", {
-      kind,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      userId,
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[UploadProjectWizard] uploading file", {
+        kind,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        userId,
+      });
+    }
     try {
       const form = new FormData();
       form.set("kind", kind);
@@ -496,11 +498,13 @@ export function UploadProjectWizard() {
         });
         return null;
       }
-      console.log("[UploadProjectWizard] storage upload success", {
-        kind,
-        path: payload.path,
-        name: file.name,
-      });
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[UploadProjectWizard] storage upload success", {
+          kind,
+          path: payload.path,
+          name: file.name,
+        });
+      }
       return payload.path;
     } catch (error) {
       setMediaError("Image upload failed. Please try again.");

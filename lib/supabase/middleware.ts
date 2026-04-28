@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabasePersistedAuthCookieOptions } from "./auth-cookie";
 import { getPublicSupabaseConfigOrNull } from "./public-env";
 
 const PUBLIC_ADMIN_ROUTES = new Set(["/admin/login", "/admin/signup"]);
@@ -49,6 +50,7 @@ export async function updateSession(request: NextRequest) {
         );
       },
     },
+    cookieOptions: { ...supabasePersistedAuthCookieOptions },
   });
 
   try {

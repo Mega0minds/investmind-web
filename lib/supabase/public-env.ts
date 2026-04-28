@@ -38,7 +38,7 @@ export function getPublicSupabaseConfig(): { url: string; anonKey: string } {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
   if (!rawUrl?.trim() || !anonKey?.trim()) {
     throw new Error(
-      "Missing Supabase env: add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see .env.local.example), then restart npm run dev."
+      "Missing Supabase env: copy .env.example to .env.local and set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then restart the dev server or redeploy."
     );
   }
   return {

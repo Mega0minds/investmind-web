@@ -88,6 +88,12 @@ export default async function Landing() {
   } = await supabase.auth.getUser();
   const landingCards = await getLandingCardsCached(supabase, Boolean(user));
   const learnMoreHref = user ? "/dashboard" : "/login";
+  /** One full copy + duplicate for CSS marquee (-50% scroll); avoids back-to-back identical cards. */
+  const carouselCards =
+    landingCards.length > 1
+      ? [...landingCards, ...landingCards.map((c) => ({ ...c, id: `${c.id}__loop` }))]
+      : landingCards;
+  const marqueeActive = landingCards.length > 1;
 
   return (
     <div className="min-w-0 overflow-x-hidden">
@@ -218,11 +224,10 @@ export default async function Landing() {
 
           {/* Auto-scrolling circus-style card row (no scrollbar, infinite loop) */}
           <div className="card-row-wrap overflow-hidden -mx-4 sm:-mx-6 md:mx-0 py-2">
-            <div className="card-track flex gap-4 sm:gap-6 min-w-max w-max">
-              {(landingCards.length > 1
-                ? landingCards.flatMap((card) => [card, { ...card, id: `${card.id}-dup` }])
-                : landingCards
-              ).map((card) => (
+            <div
+              className={`card-track flex gap-4 sm:gap-6 min-w-max w-max${marqueeActive ? " card-track--marquee" : ""}`}
+            >
+              {carouselCards.map((card) => (
                 <a
                   key={card.id}
                   href={card.href}

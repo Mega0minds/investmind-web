@@ -43,7 +43,8 @@ body {
   width: 0;
   height: 0;
 }
-.card-track {
+/* Marquee: two identical sequences; -50% = one full pass (see landing page). */
+.card-track--marquee {
   animation: card-track-scroll 45s linear infinite;
   will-change: transform;
 }
@@ -51,7 +52,7 @@ body {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
-.card-row-wrap:hover .card-track {
+.card-row-wrap:hover .card-track--marquee {
   animation-play-state: paused;
 }
 

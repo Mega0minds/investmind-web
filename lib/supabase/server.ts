@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { supabasePersistedAuthCookieOptions } from "./auth-cookie";
 import { getPublicSupabaseConfig } from "./public-env";
 
 export async function createClient() {
@@ -20,5 +21,6 @@ export async function createClient() {
         }
       },
     },
+    cookieOptions: { ...supabasePersistedAuthCookieOptions },
   });
 }

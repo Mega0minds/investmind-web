@@ -10,6 +10,11 @@ export type ProfileRowForSettings = {
   bio?: string | null;
   profile_visible?: boolean | null;
   interest_sectors?: string[] | null;
+  mentor_expertise?: string[] | null;
+  social_twitter?: string | null;
+  social_linkedin?: string | null;
+  social_instagram?: string | null;
+  social_website?: string | null;
 };
 
 function metaString(meta: Record<string, unknown>, key: string): string {

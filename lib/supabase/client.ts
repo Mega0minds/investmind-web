@@ -1,5 +1,6 @@
 import { processLock } from "@supabase/auth-js";
 import { createBrowserClient } from "@supabase/ssr";
+import { supabasePersistedAuthCookieOptions } from "./auth-cookie";
 import { getPublicSupabaseConfig } from "./public-env";
 
 const nonBlockingLock: typeof processLock = async (_name, _acquireTimeout, fn) => fn();
@@ -19,6 +20,8 @@ export function createClient(rememberMe: boolean = true) {
       // We keep singleton client usage and let auth ops run without waiting.
       lock: nonBlockingLock,
     },
-    ...(rememberMe ? {} : { cookieOptions: { maxAge: undefined } }),
+    cookieOptions: rememberMe
+      ? { ...supabasePersistedAuthCookieOptions }
+      : { maxAge: undefined },
   });
 }

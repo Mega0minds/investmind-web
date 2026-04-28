@@ -20,3 +20,6 @@ export const THEME = {
 
 /** Max characters for profile bio (settings). */
 export const PROFILE_BIO_MAX_LENGTH = 300;
+
+/** Max characters per social field (handles or URLs). */
+export const PROFILE_SOCIAL_MAX_LENGTH = 200;

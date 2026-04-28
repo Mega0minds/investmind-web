@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { getSiteUrlForMetadata } from "@/lib/site-url";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,6 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: getSiteUrlForMetadata(),
   title: "InvestMind | Discover Africa's Next Big Ideas",
   description:
     "Connect youth creatives across Africa with mentors and a supportive community. Get your ideas seen, funded, guided, and grown.",

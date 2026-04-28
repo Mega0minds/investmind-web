@@ -30,6 +30,10 @@ alter table public.profiles add column if not exists updated_at timestamptz defa
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists location text;
 alter table public.profiles add column if not exists bio text;
+alter table public.profiles add column if not exists social_twitter text;
+alter table public.profiles add column if not exists social_linkedin text;
+alter table public.profiles add column if not exists social_instagram text;
+alter table public.profiles add column if not exists social_website text;
 alter table public.profiles add column if not exists profile_visible boolean default true;
 alter table public.profiles add column if not exists country text;
 alter table public.profiles add column if not exists state text;

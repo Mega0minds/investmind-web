@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { PROFILE_BIO_MAX_LENGTH, THEME } from "@/lib/constants";
+import { PROFILE_BIO_MAX_LENGTH, PROFILE_SOCIAL_MAX_LENGTH, THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileFormFields, type ProfileRowForSettings } from "@/lib/profile-fields";
 import { FOUNDER_INTEREST_SECTOR_OPTIONS } from "@/lib/mentor-matching";
 import { normalizeRole } from "@/lib/roles";
+import { clampSocialInput } from "@/lib/social-links";
 import { ChangePasswordModal } from "./_components/ChangePasswordModal";
 import { EliteReachCard, type EliteReachStats } from "./_components/EliteReachCard";
 
@@ -70,6 +71,11 @@ type SettingsPageClientProps = {
   initialBio: string;
   initialAvatarUrl: string | null;
   initialInterestSectors: string[];
+  initialMentorExpertise: string[];
+  initialSocialTwitter: string;
+  initialSocialLinkedin: string;
+  initialSocialInstagram: string;
+  initialSocialWebsite: string;
   profileRole: string | null;
   email: string;
   eliteReach: EliteReachStats;
@@ -82,6 +88,11 @@ export function SettingsPageClient({
   initialBio,
   initialAvatarUrl,
   initialInterestSectors,
+  initialMentorExpertise,
+  initialSocialTwitter,
+  initialSocialLinkedin,
+  initialSocialInstagram,
+  initialSocialWebsite,
   profileRole,
   email,
   eliteReach,
@@ -106,6 +117,11 @@ export function SettingsPageClient({
     bio: initialBio.slice(0, PROFILE_BIO_MAX_LENGTH).trim(),
     profileVisible: initialProfileVisible,
     interestSectors: initialInterestSectors.filter((x) => typeof x === "string" && x.trim()),
+    mentorExpertise: initialMentorExpertise.filter((x) => typeof x === "string" && x.trim()),
+    socialTwitter: clampSocialInput(initialSocialTwitter, PROFILE_SOCIAL_MAX_LENGTH),
+    socialLinkedin: clampSocialInput(initialSocialLinkedin, PROFILE_SOCIAL_MAX_LENGTH),
+    socialInstagram: clampSocialInput(initialSocialInstagram, PROFILE_SOCIAL_MAX_LENGTH),
+    socialWebsite: clampSocialInput(initialSocialWebsite, PROFILE_SOCIAL_MAX_LENGTH),
     role: normalizedProfileRole === "investor" ? "investor" : "founder",
   }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -115,6 +131,21 @@ export function SettingsPageClient({
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [interestSectors, setInterestSectors] = useState<string[]>(() =>
     initialInterestSectors.filter((x) => typeof x === "string" && x.trim())
+  );
+  const [mentorExpertise, setMentorExpertise] = useState<string[]>(() =>
+    initialMentorExpertise.filter((x) => typeof x === "string" && x.trim())
+  );
+  const [socialTwitter, setSocialTwitter] = useState(() =>
+    clampSocialInput(initialSocialTwitter, PROFILE_SOCIAL_MAX_LENGTH)
+  );
+  const [socialLinkedin, setSocialLinkedin] = useState(() =>
+    clampSocialInput(initialSocialLinkedin, PROFILE_SOCIAL_MAX_LENGTH)
+  );
+  const [socialInstagram, setSocialInstagram] = useState(() =>
+    clampSocialInput(initialSocialInstagram, PROFILE_SOCIAL_MAX_LENGTH)
+  );
+  const [socialWebsite, setSocialWebsite] = useState(() =>
+    clampSocialInput(initialSocialWebsite, PROFILE_SOCIAL_MAX_LENGTH)
   );
 
   useEffect(() => {
@@ -128,7 +159,9 @@ export function SettingsPageClient({
 
       const full = await supabase
         .from("profiles")
-        .select("full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors")
+        .select(
+          "full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors, mentor_expertise, social_twitter, social_linkedin, social_instagram, social_website"
+        )
         .eq("id", user.id)
         .maybeSingle();
 
@@ -150,6 +183,11 @@ export function SettingsPageClient({
               bio: null,
               profile_visible: true,
               interest_sectors: [] as string[],
+              mentor_expertise: [] as string[],
+              social_twitter: null,
+              social_linkedin: null,
+              social_instagram: null,
+              social_website: null,
               role: null,
             }
           : null;
@@ -170,12 +208,34 @@ export function SettingsPageClient({
             (x): x is string => typeof x === "string" && x.trim().length > 0
           )
         : [];
+      const loadedExpertise = Array.isArray(
+        (profile as { mentor_expertise?: unknown } | null)?.mentor_expertise
+      )
+        ? ((profile as { mentor_expertise: string[] }).mentor_expertise ?? []).filter(
+            (x): x is string => typeof x === "string" && x.trim().length > 0
+          )
+        : [];
       setFullName(r.fullName);
       setLocation(r.location);
       setBio(bioClamped);
       setAvatarUrl(r.avatarUrl);
       setProfileVisible(vis);
       setInterestSectors(loadedInterests);
+      setMentorExpertise(loadedExpertise);
+      const pSocial = profile as {
+        social_twitter?: string | null;
+        social_linkedin?: string | null;
+        social_instagram?: string | null;
+        social_website?: string | null;
+      };
+      const tw = clampSocialInput(pSocial.social_twitter ?? "", PROFILE_SOCIAL_MAX_LENGTH);
+      const li = clampSocialInput(pSocial.social_linkedin ?? "", PROFILE_SOCIAL_MAX_LENGTH);
+      const ig = clampSocialInput(pSocial.social_instagram ?? "", PROFILE_SOCIAL_MAX_LENGTH);
+      const web = clampSocialInput(pSocial.social_website ?? "", PROFILE_SOCIAL_MAX_LENGTH);
+      setSocialTwitter(tw);
+      setSocialLinkedin(li);
+      setSocialInstagram(ig);
+      setSocialWebsite(web);
       const loadedRole = normalizeRole((profile as { role?: string | null } | null)?.role ?? null);
       setSelectedRole(loadedRole === "investor" ? "investor" : "founder");
       setSavedBaseline({
@@ -184,6 +244,11 @@ export function SettingsPageClient({
         bio: bioClamped.trim(),
         profileVisible: vis,
         interestSectors: loadedInterests,
+        mentorExpertise: loadedExpertise,
+        socialTwitter: tw,
+        socialLinkedin: li,
+        socialInstagram: ig,
+        socialWebsite: web,
         role: loadedRole === "investor" ? "investor" : "founder",
       });
     })();
@@ -349,6 +414,11 @@ export function SettingsPageClient({
     const firstName = parts[0] ?? "";
     const lastName = parts.slice(1).join(" ") || null;
 
+    const stTw = clampSocialInput(socialTwitter, PROFILE_SOCIAL_MAX_LENGTH);
+    const stLi = clampSocialInput(socialLinkedin, PROFILE_SOCIAL_MAX_LENGTH);
+    const stIg = clampSocialInput(socialInstagram, PROFILE_SOCIAL_MAX_LENGTH);
+    const stWeb = clampSocialInput(socialWebsite, PROFILE_SOCIAL_MAX_LENGTH);
+
     const { data: updatedRows, error } = await supabase
       .from("profiles")
       .update({
@@ -359,7 +429,12 @@ export function SettingsPageClient({
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
         role: selectedRole,
-        ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
+        interest_sectors: interestSectors,
+        mentor_expertise: mentorExpertise,
+        social_twitter: stTw || null,
+        social_linkedin: stLi || null,
+        social_instagram: stIg || null,
+        social_website: stWeb || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
@@ -369,7 +444,7 @@ export function SettingsPageClient({
       setSaveState("error");
       if (/column/i.test(error.message) && /does not exist/i.test(error.message)) {
         setSaveMessage(
-          "Database missing profile columns. Run supabase/migrations/003_profiles_settings_fields.sql in the SQL Editor, then try again."
+          "Database missing profile columns. Run supabase/migrations (e.g. 003_profiles_settings_fields.sql, 013_profiles_social.sql) in the SQL Editor, then try again."
         );
       } else {
         setSaveMessage(error.message);
@@ -387,7 +462,12 @@ export function SettingsPageClient({
         bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH) || null,
         profile_visible: profileVisible,
         role: selectedRole,
-        ...(isFounderRole ? { interest_sectors: interestSectors } : {}),
+        interest_sectors: interestSectors,
+        mentor_expertise: mentorExpertise,
+        social_twitter: stTw || null,
+        social_linkedin: stLi || null,
+        social_instagram: stIg || null,
+        social_website: stWeb || null,
         updated_at: new Date().toISOString(),
       });
       if (insertError) {
@@ -403,7 +483,12 @@ export function SettingsPageClient({
       location: location.trim(),
       bio: bio.trim().slice(0, PROFILE_BIO_MAX_LENGTH),
       profileVisible,
-      interestSectors: isFounderRole ? [...interestSectors] : b.interestSectors,
+      interestSectors: [...interestSectors],
+      mentorExpertise: [...mentorExpertise],
+      socialTwitter: stTw,
+      socialLinkedin: stLi,
+      socialInstagram: stIg,
+      socialWebsite: stWeb,
       role: selectedRole,
     }));
     setTimeout(() => {
@@ -422,8 +507,26 @@ export function SettingsPageClient({
       bio.trim() !== savedBaseline.bio ||
       profileVisible !== savedBaseline.profileVisible ||
       selectedRole !== savedBaseline.role ||
-      (isFounderRole && !sameStringArray(interestSectors, savedBaseline.interestSectors)),
-    [fullName, location, bio, profileVisible, selectedRole, isFounderRole, interestSectors, savedBaseline]
+      !sameStringArray(interestSectors, savedBaseline.interestSectors) ||
+      !sameStringArray(mentorExpertise, savedBaseline.mentorExpertise) ||
+      clampSocialInput(socialTwitter, PROFILE_SOCIAL_MAX_LENGTH) !== savedBaseline.socialTwitter ||
+      clampSocialInput(socialLinkedin, PROFILE_SOCIAL_MAX_LENGTH) !== savedBaseline.socialLinkedin ||
+      clampSocialInput(socialInstagram, PROFILE_SOCIAL_MAX_LENGTH) !== savedBaseline.socialInstagram ||
+      clampSocialInput(socialWebsite, PROFILE_SOCIAL_MAX_LENGTH) !== savedBaseline.socialWebsite,
+    [
+      fullName,
+      location,
+      bio,
+      profileVisible,
+      selectedRole,
+      interestSectors,
+      mentorExpertise,
+      socialTwitter,
+      socialLinkedin,
+      socialInstagram,
+      socialWebsite,
+      savedBaseline,
+    ]
   );
 
   const saveDisabled = saveState === "saving" || !hasUnsavedProfileChanges;
@@ -627,7 +730,111 @@ export function SettingsPageClient({
                 </p>
               </div>
 
-              {isFounderRole && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-3">
+                <div>
+                  <h4 className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Social</h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Optional — shown under your bio on your public profile. Use @handle or a full URL where
+                    helpful.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    X (Twitter)
+                  </label>
+                  <input
+                    type="text"
+                    value={socialTwitter}
+                    maxLength={PROFILE_SOCIAL_MAX_LENGTH}
+                    onChange={(e) =>
+                      setSocialTwitter(clampSocialInput(e.target.value, PROFILE_SOCIAL_MAX_LENGTH))
+                    }
+                    placeholder="@you or https://x.com/you"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    LinkedIn
+                  </label>
+                  <input
+                    type="text"
+                    value={socialLinkedin}
+                    maxLength={PROFILE_SOCIAL_MAX_LENGTH}
+                    onChange={(e) =>
+                      setSocialLinkedin(clampSocialInput(e.target.value, PROFILE_SOCIAL_MAX_LENGTH))
+                    }
+                    placeholder="Profile URL or your public username"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    Instagram
+                  </label>
+                  <input
+                    type="text"
+                    value={socialInstagram}
+                    maxLength={PROFILE_SOCIAL_MAX_LENGTH}
+                    onChange={(e) =>
+                      setSocialInstagram(clampSocialInput(e.target.value, PROFILE_SOCIAL_MAX_LENGTH))
+                    }
+                    placeholder="@you or profile URL"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    Website
+                  </label>
+                  <input
+                    type="text"
+                    value={socialWebsite}
+                    maxLength={PROFILE_SOCIAL_MAX_LENGTH}
+                    onChange={(e) =>
+                      setSocialWebsite(clampSocialInput(e.target.value, PROFILE_SOCIAL_MAX_LENGTH))
+                    }
+                    placeholder="https://yoursite.com"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5A2D8F]/40 min-h-[44px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                  Expertise
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  {isFounderRole
+                    ? "Areas you know well — shown on your profile and used to match you with mentors."
+                    : "Areas you can help with — shown on your mentor profile when others browse."}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {
+                    const active = mentorExpertise.includes(sector);
+                    return (
+                      <button
+                        key={sector}
+                        type="button"
+                        onClick={() =>
+                          setMentorExpertise((prev) =>
+                            prev.includes(sector) ? prev.filter((s) => s !== sector) : [...prev, sector]
+                          )
+                        }
+                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[40px] touch-manipulation ${
+                          active
+                            ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {sector}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {isFounderRole ? (
                 <div>
                   <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
                     Sectors you care about
@@ -642,6 +849,38 @@ export function SettingsPageClient({
                       return (
                         <button
                           key={sector}
+                          type="button"
+                          onClick={() =>
+                            setInterestSectors((prev) =>
+                              prev.includes(sector) ? prev.filter((s) => s !== sector) : [...prev, sector]
+                            )
+                          }
+                          className={`rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[40px] touch-manipulation ${
+                            active
+                              ? "border-[#5A2D8F] bg-[#EEF2FF] text-[#5A2D8F]"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {sector}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] font-semibold tracking-wide text-gray-400 uppercase mb-1.5">
+                    Interest sectors
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Sectors you follow or want to engage with — shown as interests on your mentor profile.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {
+                      const active = interestSectors.includes(sector);
+                      return (
+                        <button
+                          key={`int-${sector}`}
                           type="button"
                           onClick={() =>
                             setInterestSectors((prev) =>
@@ -678,7 +917,7 @@ export function SettingsPageClient({
         </section>
 
         <div className="lg:col-span-4 flex flex-col gap-4 sm:gap-6">
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6 flex-1">
+          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6 shrink-0">
             <div className="flex items-center gap-2 mb-4">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"

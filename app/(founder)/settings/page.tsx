@@ -20,7 +20,7 @@ export default async function SettingsPage() {
   const profileResult = await supabase
     .from("profiles")
     .select(
-      "full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors"
+      "full_name, first_name, last_name, avatar_url, location, bio, profile_visible, role, interest_sectors, mentor_expertise, social_twitter, social_linkedin, social_instagram, social_website"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -41,6 +41,11 @@ export default async function SettingsPage() {
           profile_visible: true as boolean | null,
           role: null as string | null,
           interest_sectors: [] as string[],
+          mentor_expertise: [] as string[],
+          social_twitter: null as string | null,
+          social_linkedin: null as string | null,
+          social_instagram: null as string | null,
+          social_website: null as string | null,
         }
       : null;
   } else if (profileResult.error) {
@@ -73,6 +78,14 @@ export default async function SettingsPage() {
               )
             : []
         }
+        initialMentorExpertise={
+          profile &&
+          Array.isArray((profile as { mentor_expertise?: unknown }).mentor_expertise)
+            ? (profile as { mentor_expertise: string[] }).mentor_expertise.filter(
+                (x): x is string => typeof x === "string" && x.trim().length > 0
+              )
+            : []
+        }
         profileRole={profile?.role ?? null}
         email={user.email ?? ""}
         eliteReach={{
@@ -82,6 +95,10 @@ export default async function SettingsPage() {
           lastMonth: viewCounts.lastMonth,
           statsReady: !viewCounts.error,
         }}
+        initialSocialTwitter={(profile as { social_twitter?: string | null })?.social_twitter ?? ""}
+        initialSocialLinkedin={(profile as { social_linkedin?: string | null })?.social_linkedin ?? ""}
+        initialSocialInstagram={(profile as { social_instagram?: string | null })?.social_instagram ?? ""}
+        initialSocialWebsite={(profile as { social_website?: string | null })?.social_website ?? ""}
       />
     </DashboardShell>
   );
