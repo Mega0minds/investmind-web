@@ -31,9 +31,9 @@ export function AdminConsoleShell({
   const navItems = allowed ? NAV_ITEMS.filter((item) => allowed.has(item.key)) : NAV_ITEMS;
 
   return (
-    <main className="min-h-screen bg-[#f6f8fb]">
+    <main className="min-h-screen bg-[#E9E3DD]">
       <div className="min-h-screen md:pl-[230px]">
-        <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-20 md:block md:w-[230px] md:overflow-y-auto border-r border-gray-200 bg-white p-4 md:p-5">
+        <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-20 md:block md:w-[230px] md:overflow-y-auto border-r border-[#CFC5E3] bg-[#E7E2F2] p-4 md:p-5">
           <div className="rounded-2xl p-3 text-white" style={{ backgroundColor: THEME.primary }}>
             <p className="text-xs uppercase tracking-wider text-white/80">Company Console</p>
             <p className="mt-1 text-lg font-bold">InvestMind Admin</p>
@@ -46,7 +46,9 @@ export function AdminConsoleShell({
                   key={item.key}
                   href={item.href}
                   className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                    active ? "bg-purple-50 font-semibold text-purple-800" : "text-gray-600 hover:bg-gray-50"
+                    active
+                      ? "bg-[#E4DAF7] font-semibold text-[#40355C]"
+                      : "text-[#51486B] hover:bg-[#F0EBFA]"
                   }`}
                 >
                   {item.label}
@@ -60,7 +62,7 @@ export function AdminConsoleShell({
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
+          <header className="sticky top-0 z-10 border-b border-[#CFC5E3] bg-[#E7E2F2] px-4 py-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-start gap-3">
                 <AdminMobileSidebar navItems={navItems} activeNav={activeNav} />

@@ -168,7 +168,8 @@ export function SettingsPageClient({
       let profile: ProfileRowForSettings | null = null;
       if (
         full.error?.message?.includes("column") &&
-        full.error?.message?.includes("does not exist")
+        (full.error?.message?.includes("does not exist") ||
+          full.error?.message?.includes("schema cache"))
       ) {
         const basic = await supabase
           .from("profiles")
@@ -419,6 +420,8 @@ export function SettingsPageClient({
     const stIg = clampSocialInput(socialInstagram, PROFILE_SOCIAL_MAX_LENGTH);
     const stWeb = clampSocialInput(socialWebsite, PROFILE_SOCIAL_MAX_LENGTH);
 
+    const roleChanged = selectedRole !== savedBaseline.role;
+
     const { data: updatedRows, error } = await supabase
       .from("profiles")
       .update({
@@ -442,7 +445,10 @@ export function SettingsPageClient({
 
     if (error) {
       setSaveState("error");
-      if (/column/i.test(error.message) && /does not exist/i.test(error.message)) {
+      if (
+        /column/i.test(error.message) &&
+        (/does not exist/i.test(error.message) || /schema cache/i.test(error.message))
+      ) {
         setSaveMessage(
           "Database missing profile columns. Run supabase/migrations (e.g. 003_profiles_settings_fields.sql, 013_profiles_social.sql) in the SQL Editor, then try again."
         );
@@ -491,6 +497,14 @@ export function SettingsPageClient({
       socialWebsite: stWeb,
       role: selectedRole,
     }));
+
+    // Role-sensitive navigation (e.g. sidebar categories) is initialized at app shell load.
+    // Force a reload after role change so menu visibility updates immediately.
+    if (roleChanged && typeof window !== "undefined") {
+      window.location.reload();
+      return;
+    }
+
     setTimeout(() => {
       setSaveState("idle");
       setSaveMessage(null);

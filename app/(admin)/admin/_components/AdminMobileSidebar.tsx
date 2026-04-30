@@ -22,7 +22,7 @@ export function AdminMobileSidebar({
         aria-expanded={sidebarOpen}
         aria-controls="admin-mobile-sidebar"
         onClick={() => setSidebarOpen(true)}
-        className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 md:hidden"
+        className="rounded-lg border border-[#CFC5E3] p-2 text-[#51486B] transition hover:bg-[#F0EBFA] md:hidden"
         aria-label="Open admin menu"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,16 +41,16 @@ export function AdminMobileSidebar({
 
       <aside
         id="admin-mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 w-[min(280px,85vw)] border-r border-gray-200 bg-white p-4 shadow-xl transition-transform duration-200 ease-out md:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 w-[min(280px,85vw)] border-r border-[#CFC5E3] bg-[#E7E2F2] p-4 shadow-xl transition-transform duration-200 ease-out md:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-900">Admin Menu</p>
+          <p className="text-sm font-semibold text-[#40355C]">Admin Menu</p>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
+            className="rounded-lg p-2 text-[#51486B] transition hover:bg-[#F0EBFA]"
             aria-label="Close admin menu"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,9 @@ export function AdminMobileSidebar({
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  active ? "bg-purple-50 font-semibold text-purple-800" : "text-gray-600 hover:bg-gray-50"
+                  active
+                    ? "bg-[#E4DAF7] font-semibold text-[#40355C]"
+                    : "text-[#51486B] hover:bg-[#F0EBFA]"
                 }`}
               >
                 {item.label}

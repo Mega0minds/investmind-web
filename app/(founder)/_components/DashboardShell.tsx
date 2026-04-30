@@ -192,16 +192,16 @@ export function DashboardShell({
       {/* Left sidebar */}
       <aside
         id={SIDEBAR_ID}
-        className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-gray-200 bg-white flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-[#CFC5E3] bg-[#E7E2F2] flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="p-3 sm:p-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="p-3 sm:p-4 border-b border-[#D8CEE9] flex items-center justify-between">
           <Logo variant="dashboard" className="mb-0" />
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+            className="md:hidden p-2 rounded-lg text-[#51486B] hover:bg-[#F0EBFA]"
             aria-label="Close menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,7 +220,7 @@ export function DashboardShell({
                 href={href}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  isActive ? "bg-[#EEF2FF] text-[#2563EB]" : "text-gray-600 hover:bg-gray-50"
+                  isActive ? "bg-[#E4DAF7] text-[#40355C]" : "text-[#51486B] hover:bg-[#F0EBFA]"
                 }`}
               >
                 {iconMap[icon]}
@@ -229,10 +229,10 @@ export function DashboardShell({
             );
           })}
         </nav>
-        <div className="p-4 border-t border-gray-100 relative" ref={sidebarMenuRef}>
+        <div className="p-4 border-t border-[#D8CEE9] relative" ref={sidebarMenuRef}>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-xl p-2 -m-2 text-left hover:bg-gray-50 transition cursor-pointer"
+            className="flex w-full items-center gap-3 rounded-xl p-2 -m-2 text-left hover:bg-[#F0EBFA] transition cursor-pointer"
             aria-expanded={sidebarAccountOpen}
             aria-haspopup="menu"
             onClick={() => {
@@ -244,10 +244,10 @@ export function DashboardShell({
               {avatarInitials(userDisplay)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{userDisplay}</p>
-              <p className="text-xs text-gray-500">Founder Portal</p>
+              <p className="text-sm font-medium text-[#302A45] truncate">{userDisplay}</p>
+              <p className="text-xs text-[#625A7B]">Founder Portal</p>
             </div>
-            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <svg className="w-4 h-4 text-[#6C6386] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -262,7 +262,7 @@ export function DashboardShell({
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-60 lg:ml-64">
         {/* Top header bar (non-sticky; main scrolls) */}
-        <header className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-white border-b border-gray-200 shadow-sm min-h-[52px]">
+        <header className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-[#E7E2F2] border-b border-[#CFC5E3] shadow-sm min-h-[52px]">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}

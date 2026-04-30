@@ -26,7 +26,11 @@ export default async function SettingsPage() {
     .maybeSingle();
 
   let profile = profileResult.data;
-  if (profileResult.error?.message?.includes("column") && profileResult.error?.message?.includes("does not exist")) {
+  if (
+    profileResult.error?.message?.includes("column") &&
+    (profileResult.error?.message?.includes("does not exist") ||
+      profileResult.error?.message?.includes("schema cache"))
+  ) {
     const basic = await supabase
       .from("profiles")
       .select("full_name, first_name, last_name")

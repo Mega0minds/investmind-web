@@ -34,7 +34,7 @@ export function Header() {
       {/* Floating bar */}
       <div
         className="mx-auto flex max-w-6xl w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-[1.25rem] px-3 py-2.5 sm:px-6 md:px-8 sm:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
-        style={{ backgroundColor: "#F7F8FA" }}
+        style={{ backgroundColor: "#E7E2F2" }}
       >
         {/* Logo */}
         <Link href="/" className="shrink-0" aria-label="InvestMind home">
