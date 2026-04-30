@@ -12,6 +12,9 @@ import { avatarInitials } from "@/lib/user-display";
 
 const SIDEBAR_ID = "dashboard-sidebar";
 
+/** Dark dashboard chrome (sidebar + top bar) */
+const DASH_NAV_BG = "#241f32";
+
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "grid" },
   { href: "/explore-ideas", label: "Explore Ideas", icon: "eye" },
@@ -192,16 +195,17 @@ export function DashboardShell({
       {/* Left sidebar */}
       <aside
         id={SIDEBAR_ID}
-        className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-[#CFC5E3] bg-[#E7E2F2] flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-[#3d3550] flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
+        style={{ backgroundColor: DASH_NAV_BG }}
       >
-        <div className="p-3 sm:p-4 border-b border-[#D8CEE9] flex items-center justify-between">
+        <div className="p-3 sm:p-4 border-b border-[#3d3550] flex items-center justify-between">
           <Logo variant="dashboard" className="mb-0" />
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden p-2 rounded-lg text-[#51486B] hover:bg-[#F0EBFA]"
+            className="md:hidden p-2 rounded-lg text-[#d4cee8] hover:bg-white/10 transition"
             aria-label="Close menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,7 +224,9 @@ export function DashboardShell({
                 href={href}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  isActive ? "bg-[#E4DAF7] text-[#40355C]" : "text-[#51486B] hover:bg-[#F0EBFA]"
+                  isActive
+                    ? "bg-[#5A2D8F] text-white shadow-sm"
+                    : "text-[#d4cee8] hover:bg-white/10 hover:text-white"
                 }`}
               >
                 {iconMap[icon]}
@@ -229,10 +235,10 @@ export function DashboardShell({
             );
           })}
         </nav>
-        <div className="p-4 border-t border-[#D8CEE9] relative" ref={sidebarMenuRef}>
+        <div className="p-4 border-t border-[#3d3550] relative" ref={sidebarMenuRef}>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-xl p-2 -m-2 text-left hover:bg-[#F0EBFA] transition cursor-pointer"
+            className="flex w-full items-center gap-3 rounded-xl p-2 -m-2 text-left hover:bg-white/10 transition cursor-pointer"
             aria-expanded={sidebarAccountOpen}
             aria-haspopup="menu"
             onClick={() => {
@@ -240,14 +246,14 @@ export function DashboardShell({
               setHeaderAccountOpen(false);
             }}
           >
-            <div className="w-10 h-10 rounded-full bg-[#E0E7FF] flex items-center justify-center text-sm font-semibold text-[#3730A3] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#5A2D8F]/50 border border-white/15 flex items-center justify-center text-sm font-semibold text-white shrink-0">
               {avatarInitials(userDisplay)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#302A45] truncate">{userDisplay}</p>
-              <p className="text-xs text-[#625A7B]">Founder Portal</p>
+              <p className="text-sm font-medium text-[#f0ecff] truncate">{userDisplay}</p>
+              <p className="text-xs text-[#9a91b8]">Founder Portal</p>
             </div>
-            <svg className="w-4 h-4 text-[#6C6386] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <svg className="w-4 h-4 text-[#b8aed4] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -262,11 +268,14 @@ export function DashboardShell({
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-60 lg:ml-64">
         {/* Top header bar (non-sticky; main scrolls) */}
-        <header className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-[#E7E2F2] border-b border-[#CFC5E3] shadow-sm min-h-[52px]">
+        <header
+          className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 border-b border-[#3d3550] shadow-sm min-h-[52px]"
+          style={{ backgroundColor: DASH_NAV_BG }}
+        >
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 shrink-0"
+            className="md:hidden p-2 rounded-lg text-[#d4cee8] hover:bg-white/10 shrink-0 transition"
             aria-label="Open menu"
             aria-expanded={sidebarOpen}
           >
@@ -277,7 +286,7 @@ export function DashboardShell({
           <div className="flex-1 flex items-center justify-center min-w-0 max-w-[200px] xs:max-w-none sm:max-w-md mx-auto">
             <label className="relative w-full min-w-0">
               <span className="sr-only">Search</span>
-              <span className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <span className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-[#9a91b8] pointer-events-none">
                 <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -286,14 +295,14 @@ export function DashboardShell({
                 type="search"
                 placeholder="Search..."
                 title="Search for mentors, creatives or ideas"
-                className="w-full min-w-0 rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 py-2 sm:py-2.5 pl-8 sm:pl-10 pr-3 text-xs sm:text-sm placeholder-gray-400 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none transition"
+                className="w-full min-w-0 rounded-lg sm:rounded-xl border border-[#4a4160] bg-[#1a1626] py-2 sm:py-2.5 pl-8 sm:pl-10 pr-3 text-xs sm:text-sm text-[#f0ecff] placeholder:text-[#7a7194] focus:border-[#5A2D8F] focus:ring-1 focus:ring-[#5A2D8F]/60 outline-none transition"
               />
             </label>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Link
               href="/community"
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
+              className="p-2 rounded-lg text-[#d4cee8] hover:bg-white/10 hover:text-white transition"
               aria-label="Community"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,7 +312,7 @@ export function DashboardShell({
             <div className="relative ml-1" ref={headerMenuRef}>
               <button
                 type="button"
-                className="relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+                className="relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa] focus-visible:ring-offset-2 focus-visible:ring-offset-[#241f32]"
                 aria-expanded={headerAccountOpen}
                 aria-haspopup="menu"
                 aria-label="Account menu"
@@ -312,10 +321,10 @@ export function DashboardShell({
                   setSidebarAccountOpen(false);
                 }}
               >
-                <div className="w-9 h-9 rounded-full bg-[#E0E7FF] flex items-center justify-center text-sm font-semibold text-[#3730A3]">
+                <div className="w-9 h-9 rounded-full bg-[#5A2D8F]/50 border border-white/15 flex items-center justify-center text-sm font-semibold text-white">
                   {avatarInitials(userDisplay)}
                 </div>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white pointer-events-none" aria-hidden />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#241f32] pointer-events-none" aria-hidden />
               </button>
               <AccountDropdown
                 open={headerAccountOpen}
