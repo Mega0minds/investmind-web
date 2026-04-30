@@ -8,9 +8,6 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 
-const AGE_MIN = 13;
-const AGE_MAX = 120;
-
 export function AdminSignupForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -24,15 +21,8 @@ export function AdminSignupForm() {
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
     const firstName = (form.elements.namedItem("firstName") as HTMLInputElement).value.trim();
     const lastName = (form.elements.namedItem("lastName") as HTMLInputElement).value.trim();
-    const ageRaw = (form.elements.namedItem("age") as HTMLInputElement).value.trim();
-    const age = Number.parseInt(ageRaw, 10);
-
     if (!email || !password || !firstName || !lastName) {
       setError("Please fill in every field.");
-      return;
-    }
-    if (!Number.isFinite(age) || age < AGE_MIN || age > AGE_MAX) {
-      setError(`Age must be between ${AGE_MIN} and ${AGE_MAX}.`);
       return;
     }
 
@@ -85,7 +75,6 @@ export function AdminSignupForm() {
         last_name: lastName,
         full_name: fullName,
         role: "admin",
-        age,
         admin_approval_status: "pending",
         admin_authority_level: null,
         profile_visible: false,
@@ -132,16 +121,6 @@ export function AdminSignupForm() {
           name="lastName"
           autoComplete="family-name"
           id="admin-signup-last"
-          className="py-2.5 sm:py-3"
-          required
-        />
-        <Input
-          label="Age"
-          name="age"
-          type="number"
-          min={AGE_MIN}
-          max={AGE_MAX}
-          id="admin-signup-age"
           className="py-2.5 sm:py-3"
           required
         />

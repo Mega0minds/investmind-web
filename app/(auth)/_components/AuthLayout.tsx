@@ -16,10 +16,10 @@ export function AuthLayout({
   panelKey?: string | number;
 }) {
   const formCls =
-    "w-full md:w-[55%] lg:w-[50%] h-full flex flex-col justify-center overflow-hidden px-4 sm:px-6 md:px-12 lg:px-16 py-4 sm:py-6 md:py-8 bg-white shrink-0 " +
+    "w-full md:w-[55%] lg:w-[50%] flex flex-col justify-center px-4 sm:px-6 md:px-12 lg:px-16 py-4 sm:py-6 md:py-8 bg-white shrink-0 " +
     (formOnRight ? "animate-auth-in-right" : "animate-auth-in-left");
   const heroCls =
-    "hidden md:block shrink-0 md:w-[45%] lg:w-[50%] h-full bg-white " +
+    "hidden md:block shrink-0 md:w-[45%] lg:w-[50%] bg-white " +
     (formOnRight ? "animate-auth-in-left" : "animate-auth-in-right");
 
   // Stable key on the form column so swapping sides (onboarding steps) does not remount the form
@@ -27,24 +27,24 @@ export function AuthLayout({
   const heroMountKey = panelKey != null ? `auth-hero-${panelKey}` : "auth-hero";
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-white">
+    <div className="min-h-screen flex flex-col overflow-x-hidden bg-white">
       <div className="shrink-0 relative z-10">
         <Header />
       </div>
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
+      <div className="flex-1 flex flex-col md:flex-row">
         {formOnRight ? (
           <>
             <div key={heroMountKey} className={heroCls}>
               {hero}
             </div>
             <div key="auth-form" className={formCls}>
-              <div className="flex flex-col justify-center min-h-0 max-h-full">{children}</div>
+              <div className="flex flex-col justify-center">{children}</div>
             </div>
           </>
         ) : (
           <>
             <div key="auth-form" className={formCls}>
-              <div className="flex flex-col justify-center min-h-0 max-h-full">{children}</div>
+              <div className="flex flex-col justify-center">{children}</div>
             </div>
             <div key={heroMountKey} className={heroCls}>
               {hero}

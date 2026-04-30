@@ -268,15 +268,17 @@ export function ExploreIdeasContent({
     }
     setConnectError(null);
     setConnectingProjectId(selectedProject.id);
-    const { error } = await supabase.from("project_connection_requests").insert({
-      requester_id: viewerId,
-      project_id: selectedProject.id,
-      creator_id: selectedProject.creator_id,
-      message,
-      status: "connecting",
+    const res = await fetch("/api/project-connection-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: selectedProject.id,
+        message,
+      }),
     });
-    if (error) {
-      setConnectError(error.message || "Could not send connection request.");
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (!res.ok) {
+      setConnectError(payload?.error || "Could not send connection request.");
       setConnectingProjectId(null);
       return;
     }

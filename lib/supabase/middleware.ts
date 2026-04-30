@@ -87,12 +87,9 @@ export async function updateSession(request: NextRequest) {
     const isApprovedAdmin = isAdminUser && approval === "approved";
 
     if (pathname === "/admin/login") {
-      if (!isAdminUser) {
-        if (user) {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-        return response;
-      }
+      // Keep /admin/login as a true login page. Even if a non-admin session exists,
+      // allow loading this page so users can sign in with an admin account.
+      if (!isAdminUser) return response;
       if (isApprovedAdmin) {
         return NextResponse.redirect(new URL("/admin", request.url));
       }
@@ -106,9 +103,8 @@ export async function updateSession(request: NextRequest) {
       if (isAdminUser) {
         return NextResponse.redirect(new URL("/admin/pending-approval", request.url));
       }
-      if (user) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
+      // Keep /admin/signup usable even when a non-admin session exists.
+      // This avoids blocking access to admin onboarding flows.
       return response;
     }
 

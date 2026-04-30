@@ -79,16 +79,16 @@ export function SignupForm() {
 
       const supabase = createClient();
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
-      const signInUrl =
+      const postConfirmUrl =
         siteUrl && /^https?:\/\//i.test(siteUrl)
-          ? `${siteUrl}/login`
+          ? `${siteUrl}/dashboard`
           : typeof window !== "undefined"
-            ? `${window.location.origin}/login`
+            ? `${window.location.origin}/dashboard`
             : undefined;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: signInUrl },
+        options: { emailRedirectTo: postConfirmUrl },
       });
 
       if (signUpError) {

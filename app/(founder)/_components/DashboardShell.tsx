@@ -192,7 +192,7 @@ export function DashboardShell({
       {/* Left sidebar */}
       <aside
         id={SIDEBAR_ID}
-        className={`fixed md:relative inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-gray-200 bg-white flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-gray-200 bg-white flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
@@ -260,7 +260,7 @@ export function DashboardShell({
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-60 lg:ml-64">
         {/* Top header bar (non-sticky; main scrolls) */}
         <header className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 bg-white border-b border-gray-200 shadow-sm min-h-[52px]">
           <button
