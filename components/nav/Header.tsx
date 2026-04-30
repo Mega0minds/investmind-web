@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeGetSession } from "@/lib/supabase/safe-auth";
@@ -8,8 +10,12 @@ import { safeGetSession } from "@/lib/supabase/safe-auth";
 const NAV_TEXT = "#4A4A4A";
 
 export function Header() {
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const isAboutPage = pathname === "/about";
+  const primaryNavHref = isAboutPage ? "/" : "/about";
+  const primaryNavLabel = isAboutPage ? "Home" : "About Us";
 
   useEffect(() => {
     const supabase = createClient();
@@ -28,28 +34,28 @@ export function Header() {
       {/* Floating bar */}
       <div
         className="mx-auto flex max-w-6xl w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-[1.25rem] px-3 py-2.5 sm:px-6 md:px-8 sm:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
-        style={{ backgroundColor: "#ffffff" }}
+        style={{ backgroundColor: "#F7F8FA" }}
       >
         {/* Logo */}
-        <Link
-          href="/"
-          className="text-lg sm:text-xl font-semibold italic tracking-tight shrink-0"
-          style={{
-            color: NAV_TEXT,
-            fontFamily: "Georgia, 'Times New Roman', serif",
-          }}
-        >
-          InvestMind
+        <Link href="/" className="shrink-0" aria-label="InvestMind home">
+          <Image
+            src="/assets/ilogo.png"
+            alt="InvestMind"
+            width={367}
+            height={261}
+            className="h-12 sm:h-14 w-auto"
+            priority
+          />
         </Link>
 
         {/* Desktop nav - hidden on mobile */}
         <nav className="hidden md:flex items-center gap-6 lg:gap-8 shrink-0">
           <Link
-            href="/#about"
+            href={primaryNavHref}
             className="text-sm font-medium transition hover:opacity-80 whitespace-nowrap"
             style={{ color: NAV_TEXT }}
           >
-            About Us
+            {primaryNavLabel}
           </Link>
           <Link
             href="/#faq"
@@ -124,12 +130,12 @@ export function Header() {
         >
           <nav className="flex flex-col py-2">
             <Link
-              href="/#about"
+              href={primaryNavHref}
               onClick={() => setMenuOpen(false)}
               className="px-4 py-3 text-sm font-medium transition hover:bg-gray-50"
               style={{ color: NAV_TEXT }}
             >
-              About Us
+              {primaryNavLabel}
             </Link>
             <Link
               href="/#faq"

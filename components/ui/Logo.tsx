@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { THEME } from "@/lib/constants";
 
 interface LogoProps {
@@ -35,19 +36,24 @@ const RocketIcon = ({ size = 24 }: { size?: number }) => (
  */
 export function Logo({ className = "", showRocket = false, variant = "default" }: LogoProps) {
   const isDashboard = variant === "dashboard";
+  const logoWidth = isDashboard ? 120 : 140;
+  const logoHeight = isDashboard ? 34 : 40;
   return (
     <Link
       href={isDashboard ? "/dashboard" : "/"}
-      className={`inline-flex items-center gap-2 font-semibold italic tracking-tight ${className} ${
-        isDashboard ? "text-base sm:text-lg" : "text-xl"
-      }`}
-      style={{
-        color: THEME.text,
-        fontFamily: "Georgia, 'Times New Roman', serif",
-      }}
+      className={`inline-flex items-center gap-2 ${className}`}
+      style={{ color: THEME.text }}
+      aria-label="InvestMind home"
     >
       {showRocket && <RocketIcon size={isDashboard ? 26 : 24} />}
-      InvestMind
+      <Image
+        src="/assets/ilogo.png"
+        alt="InvestMind"
+        width={logoWidth}
+        height={logoHeight}
+        priority={isDashboard}
+        className="h-auto w-auto max-h-10"
+      />
     </Link>
   );
 }

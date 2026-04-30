@@ -1,6 +1,7 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { FaqAccordion } from "@/components/public/FaqAccordion";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchExploreProjects, type ExplorePublishedProject } from "@/lib/explore-projects";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
@@ -17,14 +18,6 @@ type LandingCard = {
   coverUrl: string | null;
   href: string;
 };
-
-const FALLBACK_LANDING_CARDS: LandingCard[] = [
-  { id: "fallback-solar-hub", name: "Solar Hub", role: "Clean energy for off-grid communities", bg: "#22c55e", tilt: -1.5, coverUrl: null, href: "/explore" },
-  { id: "fallback-farmlink", name: "FarmLink", role: "Connecting smallholder farmers to markets", bg: "#f97316", tilt: 1, coverUrl: null, href: "/explore" },
-  { id: "fallback-edutrack", name: "EduTrack", role: "Learning management for schools", bg: "#84cc16", tilt: -1, coverUrl: null, href: "/explore" },
-  { id: "fallback-healthbridge", name: "HealthBridge", role: "Telehealth for rural clinics", bg: "#16a34a", tilt: 1.5, coverUrl: null, href: "/explore" },
-  { id: "fallback-paynaija", name: "PayNaija", role: "Mobile payments for informal traders", bg: "#334155", tilt: -1, coverUrl: null, href: "/explore" },
-];
 
 const CARD_BGS = ["#22c55e", "#f97316", "#84cc16", "#16a34a", "#334155"] as const;
 const CARD_TILTS = [-1.5, 1, -1, 1.5, -0.8, 0.8] as const;
@@ -50,7 +43,7 @@ function shuffle<T>(items: T[]): T[] {
 
 function toLandingCards(projects: ExplorePublishedProject[], hasSession: boolean): LandingCard[] {
   const pool = shuffle(projects).slice(0, 5);
-  if (!pool.length) return FALLBACK_LANDING_CARDS;
+  if (!pool.length) return [];
   return pool.map((p, idx) => ({
     id: p.id,
     name: p.project_name?.trim() || "Untitled project",
@@ -86,6 +79,7 @@ export default async function Landing() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (user) redirect("/dashboard");
   const landingCards = await getLandingCardsCached(supabase, Boolean(user));
   const learnMoreHref = user ? "/dashboard" : "/login";
   /** One full copy + duplicate for CSS marquee (-50% scroll); avoids back-to-back identical cards. */
@@ -183,85 +177,52 @@ export default async function Landing() {
             Explore innovative ideas shaping Africa&apos;s future.
           </p>
 
-          {/* Filter pills */}
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6 sm:mb-8">
-            <button
-              type="button"
-              className="rounded-full px-4 py-2.5 text-sm font-medium text-white transition"
-              style={{ backgroundColor: "#4A4A4A" }}
-            >
-              ★ Featured
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-4 py-2.5 text-sm font-medium transition bg-gray-100 hover:bg-gray-200"
-              style={{ color: "#4A4A4A" }}
-            >
-              Popular
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-4 py-2.5 text-sm font-medium transition bg-gray-100 hover:bg-gray-200"
-              style={{ color: "#4A4A4A" }}
-            >
-              Startups
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-4 py-2.5 text-sm font-medium transition bg-gray-100 hover:bg-gray-200"
-              style={{ color: "#4A4A4A" }}
-            >
-              Mentorship
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-4 py-2.5 text-sm font-medium transition bg-gray-100 hover:bg-gray-200"
-              style={{ color: "#4A4A4A" }}
-            >
-              Funding
-            </button>
-          </div>
-
           {/* Auto-scrolling circus-style card row (no scrollbar, infinite loop) */}
           <div className="card-row-wrap overflow-hidden -mx-4 sm:-mx-6 md:mx-0 py-2">
             <div
               className={`card-track flex gap-4 sm:gap-6 min-w-max w-max${marqueeActive ? " card-track--marquee" : ""}`}
             >
-              {carouselCards.map((card) => (
-                <a
-                  key={card.id}
-                  href={card.href}
-                  className="group shrink-0 w-[240px] sm:w-[260px] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:z-10 touch-manipulation"
-                  style={{
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)",
-                    transform: `rotate(${card.tilt}deg)`,
-                  }}
-                >
-                  <div
-                    className="relative w-full rounded-2xl flex flex-col min-h-[280px] sm:min-h-[320px]"
-                    style={{ backgroundColor: card.bg }}
+              {carouselCards.length === 0 ? (
+                <div className="w-full rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-600">
+                  No published ideas yet.
+                </div>
+              ) : (
+                carouselCards.map((card) => (
+                  <a
+                    key={card.id}
+                    href={card.href}
+                    className="group shrink-0 w-[240px] sm:w-[260px] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:z-10 touch-manipulation"
+                    style={{
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)",
+                      transform: `rotate(${card.tilt}deg)`,
+                    }}
                   >
-                    {card.coverUrl ? (
-                      <Image
-                        src={card.coverUrl}
-                        alt={card.name}
-                        fill
-                        unoptimized
-                        sizes="(max-width: 640px) 240px, 260px"
-                        className="absolute inset-0 object-cover"
-                      />
-                    ) : null}
-                    {card.coverUrl ? <div className="absolute inset-0 bg-black/30" /> : null}
-                    <div className="flex-1 min-h-[140px] sm:min-h-[180px] flex items-center justify-center">
-                      {!card.coverUrl ? <span className="text-5xl sm:text-6xl text-white/90" aria-hidden>💡</span> : null}
+                    <div
+                      className="relative w-full rounded-2xl flex flex-col min-h-[280px] sm:min-h-[320px]"
+                      style={{ backgroundColor: card.bg }}
+                    >
+                      {card.coverUrl ? (
+                        <Image
+                          src={card.coverUrl}
+                          alt={card.name}
+                          fill
+                          unoptimized
+                          sizes="(max-width: 640px) 240px, 260px"
+                          className="absolute inset-0 object-cover"
+                        />
+                      ) : null}
+                      {card.coverUrl ? <div className="absolute inset-0 bg-black/30" /> : null}
+                      <div className="flex-1 min-h-[140px] sm:min-h-[180px] flex items-center justify-center">
+                        {!card.coverUrl ? <span className="text-5xl sm:text-6xl text-white/90" aria-hidden>💡</span> : null}
+                      </div>
+                      <div className="relative z-10 p-4 pt-2 pb-5">
+                        <h3 className="text-base font-bold text-white mb-0.5">{card.name}</h3>
+                        <p className="text-sm text-white/90">{card.role}</p>
+                      </div>
                     </div>
-                    <div className="relative z-10 p-4 pt-2 pb-5">
-                      <h3 className="text-base font-bold text-white mb-0.5">{card.name}</h3>
-                      <p className="text-sm text-white/90">{card.role}</p>
-                    </div>
-                  </div>
-                </a>
-              ))}
+                  </a>
+                ))
+              )}
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function Footer() {
   return (
@@ -10,15 +11,8 @@ export function Footer() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 sm:gap-8">
           {/* Logo */}
           <div>
-            <Link
-              href="/"
-              className="text-lg font-semibold italic tracking-tight"
-              style={{
-                color: "#fff",
-                fontFamily: "Georgia, 'Times New Roman', serif",
-              }}
-            >
-              InvestMind
+            <Link href="/" className="inline-flex" aria-label="InvestMind home">
+              <Image src="/assets/ilogo.png" alt="InvestMind" width={140} height={40} className="h-auto w-auto max-h-10" />
             </Link>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.9)" }}>
               Empowering ideas. Building stability.
@@ -30,7 +24,7 @@ export function Footer() {
           {/* Links */}
           <nav className="flex flex-wrap items-center gap-4 sm:gap-6">
             <Link
-              href="/#about"
+              href="/about"
               className="text-sm transition hover:opacity-80"
               style={{ color: "rgba(255,255,255,0.9)" }}
             >

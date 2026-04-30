@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { THEME } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/server";
 import type { AdminNavKey } from "@/lib/admin-access";
 import { AdminMobileSidebar } from "./AdminMobileSidebar";
+import { AdminSignOutButton } from "./AdminSignOutButton";
 
 const NAV_ITEMS: Array<{ key: AdminNavKey; label: string; href: string }> = [
   { key: "dashboard", label: "Dashboard", href: "/admin" },
@@ -30,12 +29,6 @@ export function AdminConsoleShell({
 }) {
   const allowed = allowedNavKeys?.length ? new Set(allowedNavKeys) : null;
   const navItems = allowed ? NAV_ITEMS.filter((item) => allowed.has(item.key)) : NAV_ITEMS;
-  async function logout() {
-    "use server";
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-    redirect("/admin/login");
-  }
 
   return (
     <main className="min-h-screen bg-[#f6f8fb]">
@@ -61,14 +54,9 @@ export function AdminConsoleShell({
               );
             })}
           </nav>
-          <form action={logout} className="mt-6">
-            <button
-              type="submit"
-              className="block w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-            >
-              Log out
-            </button>
-          </form>
+          <div className="mt-6">
+            <AdminSignOutButton />
+          </div>
         </aside>
 
         <section className="min-w-0">
