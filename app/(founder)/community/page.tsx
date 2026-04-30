@@ -1,7 +1,7 @@
  "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -95,6 +95,58 @@ function formatRelativeTime(iso: string): string {
   return `${Math.max(1, Math.floor(diffMs / day))} day${diffMs >= 2 * day ? "s" : ""} ago`;
 }
 
+const COMMUNITY_POLL_PREFIX = "__POLL__:";
+
+/** Stored in `community_messages.body` (max 1000 chars). */
+function encodePollBody(question: string, options: string[]): string {
+  const q = question.trim();
+  const o = options.map((x) => x.trim()).filter((x) => x.length > 0).slice(0, 6);
+  return `${COMMUNITY_POLL_PREFIX}${JSON.stringify({ q, o })}`;
+}
+
+function decodePollBody(body: string): { q: string; o: string[] } | null {
+  if (!body.startsWith(COMMUNITY_POLL_PREFIX)) return null;
+  try {
+    const raw = body.slice(COMMUNITY_POLL_PREFIX.length);
+    const data = JSON.parse(raw) as { q?: unknown; o?: unknown };
+    if (typeof data?.q !== "string" || !Array.isArray(data.o)) return null;
+    const q = data.q.trim();
+    const o = data.o.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim());
+    if (!q || o.length < 2) return null;
+    return { q, o: o.slice(0, 6) };
+  } catch {
+    return null;
+  }
+}
+
+type PollVoteAgg = { counts: number[]; myVote: number | null; total: number };
+
+type PollVoteRow = { message_id: string; option_index: number; user_id: string };
+
+function aggregatePollVotes(
+  messageList: CommunityMessageRow[],
+  rows: PollVoteRow[],
+  viewerId: string | null
+): Record<string, PollVoteAgg> {
+  const pollIds = messageList.filter((m) => decodePollBody(m.body)).map((m) => m.id);
+  const next: Record<string, PollVoteAgg> = {};
+  for (const mid of pollIds) {
+    const poll = decodePollBody(messageList.find((m) => m.id === mid)?.body ?? "");
+    if (!poll) continue;
+    const n = poll.o.length;
+    const counts = new Array(n).fill(0) as number[];
+    let myVote: number | null = null;
+    for (const row of rows) {
+      if (row.message_id !== mid) continue;
+      const idx = row.option_index;
+      if (typeof idx === "number" && idx >= 0 && idx < n) counts[idx] += 1;
+      if (viewerId && row.user_id === viewerId) myVote = idx;
+    }
+    next[mid] = { counts, myVote, total: counts.reduce((a, b) => a + b, 0) };
+  }
+  return next;
+}
+
 export default function CommunityPage() {
   const supabase = useMemo(() => createClient(), []);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -118,6 +170,17 @@ export default function CommunityPage() {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
   const [connectingMentorId, setConnectingMentorId] = useState<string | null>(null);
+  const [pollComposerOpen, setPollComposerOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollVoteByMessageId, setPollVoteByMessageId] = useState<Record<string, PollVoteAgg>>({});
+  const [pollVoteError, setPollVoteError] = useState<string | null>(null);
+  const [votingPollKey, setVotingPollKey] = useState<string | null>(null);
+
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
 
   const recentActivities = useMemo(() => {
     if (!currentUserId) return [];
@@ -335,6 +398,25 @@ export default function CommunityPage() {
           }));
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "community_poll_votes" },
+        async () => {
+          const m = messagesRef.current;
+          const uid = currentUserIdRef.current;
+          const pollIds = m.filter((x) => decodePollBody(x.body)).map((x) => x.id);
+          if (!pollIds.length) {
+            setPollVoteByMessageId({});
+            return;
+          }
+          const { data: voteRows, error: voteErr } = await supabase
+            .from("community_poll_votes")
+            .select("message_id, option_index, user_id")
+            .in("message_id", pollIds);
+          if (voteErr) return;
+          setPollVoteByMessageId(aggregatePollVotes(m, (voteRows ?? []) as PollVoteRow[], uid));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -342,6 +424,31 @@ export default function CommunityPage() {
       void supabase.removeChannel(channel);
     };
   }, [supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const m = messages;
+      const pollIds = m.filter((x) => decodePollBody(x.body)).map((x) => x.id);
+      if (!pollIds.length) {
+        if (!cancelled) setPollVoteByMessageId({});
+        return;
+      }
+      const { data, error } = await supabase
+        .from("community_poll_votes")
+        .select("message_id, option_index, user_id")
+        .in("message_id", pollIds);
+      if (cancelled) return;
+      if (error) {
+        setPollVoteByMessageId({});
+        return;
+      }
+      setPollVoteByMessageId(aggregatePollVotes(m, (data ?? []) as PollVoteRow[], currentUserId));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, currentUserId, supabase]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -358,19 +465,65 @@ export default function CommunityPage() {
 
   async function handlePostMessage() {
     if (!currentUserId || posting) return;
-    const body = composerText.trim();
-    if (!body) return;
     setPostError(null);
     setPosting(true);
-    const { error } = await supabase
-      .from("community_messages")
-      .insert({ body, user_id: currentUserId });
-    if (error) {
-      setPostError(error.message || "Could not post message.");
-    } else {
-      setComposerText("");
+    try {
+      if (pollComposerOpen) {
+        const q = pollQuestion.trim();
+        const opts = pollOptions.map((o) => o.trim()).filter((o) => o.length > 0);
+        if (!q || opts.length < 2) {
+          setPostError("Add a poll question and at least two options.");
+          return;
+        }
+        const body = encodePollBody(q, opts);
+        if (body.length > 1000) {
+          setPostError("Poll is too long. Shorten the question or options (max 1000 characters).");
+          return;
+        }
+        const { error } = await supabase.from("community_messages").insert({ body, user_id: currentUserId });
+        if (error) {
+          setPostError(error.message || "Could not post poll.");
+        } else {
+          setPollComposerOpen(false);
+          setPollQuestion("");
+          setPollOptions(["", ""]);
+        }
+        return;
+      }
+      const body = composerText.trim();
+      if (!body) return;
+      const { error } = await supabase.from("community_messages").insert({ body, user_id: currentUserId });
+      if (error) {
+        setPostError(error.message || "Could not post message.");
+      } else {
+        setComposerText("");
+      }
+    } finally {
+      setPosting(false);
     }
-    setPosting(false);
+  }
+
+  async function handlePollVote(messageId: string, optionIndex: number) {
+    if (!currentUserId || votingPollKey) return;
+    setPollVoteError(null);
+    setVotingPollKey(`${messageId}-${optionIndex}`);
+    const { error } = await supabase.from("community_poll_votes").upsert(
+      { message_id: messageId, user_id: currentUserId, option_index: optionIndex },
+      { onConflict: "message_id,user_id" }
+    );
+    setVotingPollKey(null);
+    if (error) {
+      setPollVoteError(error.message);
+      return;
+    }
+    const m = messagesRef.current;
+    const pollIds = m.filter((x) => decodePollBody(x.body)).map((x) => x.id);
+    if (!pollIds.length) return;
+    const { data } = await supabase
+      .from("community_poll_votes")
+      .select("message_id, option_index, user_id")
+      .in("message_id", pollIds);
+    setPollVoteByMessageId(aggregatePollVotes(m, (data ?? []) as PollVoteRow[], currentUserId));
   }
 
   async function handleToggleLike(messageId: string) {
@@ -467,40 +620,128 @@ export default function CommunityPage() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <label htmlFor="community-post" className="sr-only">
-                    Share an update
-                  </label>
-                  <textarea
-                    id="community-post"
-                    rows={3}
-                    placeholder="Share an Update or Ask a Question to the community..."
-                    value={composerText}
-                    onChange={(e) => setComposerText(e.target.value)}
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none min-h-[88px]"
-                  />
+                  {pollComposerOpen ? (
+                    <div className="space-y-3">
+                      <label htmlFor="poll-question" className="sr-only">
+                        Poll question
+                      </label>
+                      <textarea
+                        id="poll-question"
+                        rows={2}
+                        placeholder="What do you want to ask?"
+                        value={pollQuestion}
+                        onChange={(e) => setPollQuestion(e.target.value)}
+                        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none min-h-[72px]"
+                      />
+                      <p className="text-xs text-gray-500">Add 2–4 choices. Members can vote once and change their vote anytime.</p>
+                      <div className="space-y-2">
+                        {pollOptions.map((opt, idx) => (
+                          <input
+                            key={idx}
+                            type="text"
+                            value={opt}
+                            onChange={(e) =>
+                              setPollOptions((prev) => {
+                                const next = [...prev];
+                                next[idx] = e.target.value;
+                                return next;
+                              })
+                            }
+                            placeholder={`Option ${idx + 1}`}
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none"
+                          />
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {pollOptions.length < 4 ? (
+                          <button
+                            type="button"
+                            onClick={() => setPollOptions((prev) => [...prev, ""])}
+                            className="text-xs sm:text-sm font-medium text-[#5A2D8F] hover:underline touch-manipulation"
+                          >
+                            + Add option
+                          </button>
+                        ) : null}
+                        {pollOptions.length > 2 ? (
+                          <button
+                            type="button"
+                            onClick={() => setPollOptions((prev) => prev.slice(0, -1))}
+                            className="text-xs sm:text-sm font-medium text-gray-600 hover:underline touch-manipulation"
+                          >
+                            Remove last option
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <label htmlFor="community-post" className="sr-only">
+                        Share an update
+                      </label>
+                      <textarea
+                        id="community-post"
+                        rows={3}
+                        placeholder="Share an Update or Ask a Question to the community..."
+                        value={composerText}
+                        onChange={(e) => setComposerText(e.target.value)}
+                        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none min-h-[88px]"
+                      />
+                    </>
+                  )}
                   <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                      <button type="button" disabled className="inline-flex items-center gap-1.5 opacity-70 cursor-not-allowed touch-manipulation">
-                        <span className="text-base">📷</span> Photo
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPostError(null);
+                          setPollVoteError(null);
+                          setPollComposerOpen((open) => !open);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 font-medium touch-manipulation transition ${
+                          pollComposerOpen
+                            ? "border-[#5A2D8F] bg-violet-50 text-[#5A2D8F]"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-base" aria-hidden>
+                          📊
+                        </span>
+                        Poll
                       </button>
-                      <button type="button" disabled className="inline-flex items-center gap-1.5 opacity-70 cursor-not-allowed touch-manipulation">
-                        <span className="text-base">▶</span> Video
-                      </button>
-                      <button type="button" disabled className="inline-flex items-center gap-1.5 opacity-70 cursor-not-allowed touch-manipulation">
-                        <span className="text-base">📊</span> Poll
-                      </button>
+                      {pollComposerOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPollComposerOpen(false);
+                            setPollQuestion("");
+                            setPollOptions(["", ""]);
+                            setPostError(null);
+                          }}
+                          className="text-xs sm:text-sm font-medium text-gray-600 hover:underline touch-manipulation"
+                        >
+                          Back to post
+                        </button>
+                      ) : null}
                     </div>
                     <button
                       type="button"
                       onClick={() => void handlePostMessage()}
-                      disabled={posting || !currentUserId || !composerText.trim()}
-                      className="rounded-xl px-5 py-2.5 sm:py-2 text-sm font-semibold text-white min-h-[44px] w-full sm:w-auto touch-manipulation"
+                      disabled={
+                        posting ||
+                        !currentUserId ||
+                        (pollComposerOpen
+                          ? !pollQuestion.trim() ||
+                            pollOptions.map((o) => o.trim()).filter(Boolean).length < 2
+                          : !composerText.trim())
+                      }
+                      className="rounded-xl px-5 py-2.5 sm:py-2 text-sm font-semibold text-white min-h-[44px] w-full sm:w-auto touch-manipulation disabled:opacity-60"
                       style={{ backgroundColor: THEME.primary }}
                     >
-                      {posting ? "Posting..." : "Post"}
+                      {posting ? "Posting..." : pollComposerOpen ? "Post poll" : "Post"}
                     </button>
                   </div>
                   {postError && <p className="mt-2 text-xs text-red-600">{postError}</p>}
+                  {pollVoteError && <p className="mt-2 text-xs text-red-600">{pollVoteError}</p>}
                 </div>
               </div>
             </div>
@@ -537,7 +778,60 @@ export default function CommunityPage() {
                       </div>
                     </div>
                   </div>
-                  <p className="px-4 pb-4 text-sm text-gray-700 wrap-break-word whitespace-pre-wrap">{msg.body}</p>
+                  {(() => {
+                    const poll = decodePollBody(msg.body);
+                    if (!poll) {
+                      return (
+                        <p className="px-4 pb-4 text-sm text-gray-700 wrap-break-word whitespace-pre-wrap">{msg.body}</p>
+                      );
+                    }
+                    const agg = pollVoteByMessageId[msg.id];
+                    const counts = poll.o.map((_, i) => agg?.counts[i] ?? 0);
+                    const total = counts.reduce((a, b) => a + b, 0);
+                    const myVote = agg?.myVote ?? null;
+                    return (
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-sm font-semibold text-gray-900">{poll.q}</p>
+                        <ul className="space-y-2">
+                          {poll.o.map((label, idx) => {
+                            const count = counts[idx] ?? 0;
+                            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                            const selected = myVote === idx;
+                            return (
+                              <li key={idx}>
+                                <button
+                                  type="button"
+                                  disabled={!currentUserId || votingPollKey !== null}
+                                  onClick={() => void handlePollVote(msg.id, idx)}
+                                  className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition touch-manipulation disabled:opacity-60 ${
+                                    selected
+                                      ? "border-[#5A2D8F] bg-violet-50"
+                                      : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium text-gray-900 wrap-break-word">{label}</span>
+                                    <span className="shrink-0 text-xs text-gray-600 tabular-nums">
+                                      {pct}% · {count}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 h-2 rounded-full bg-white/80 border border-gray-100 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full transition-all"
+                                      style={{ width: `${pct}%`, backgroundColor: THEME.primary }}
+                                    />
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {!currentUserId ? (
+                          <p className="text-xs text-gray-500">Sign in to vote on polls.</p>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
                     <button
                       type="button"

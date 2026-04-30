@@ -56,6 +56,25 @@ type RecommendedMentor = {
   initials: string;
 };
 
+type DashboardProfileRow = {
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  location?: string | null;
+  bio?: string | null;
+  role?: string | null;
+  interest_sectors?: unknown;
+  mentor_expertise?: unknown;
+};
+
+type ProfileCompletionState = {
+  show: boolean;
+  remainingPercent: number;
+  completed: number;
+  total: number;
+};
+
 type DashboardCachedPayload = {
   firstName: string;
   statCards: StatCard[];
@@ -69,6 +88,45 @@ type DashboardCachedPayload = {
   hideMyProjectsSection: boolean;
   isFounderLike: boolean;
 };
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function normalizedStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
+
+function computeProfileCompletion(
+  profile: DashboardProfileRow | null,
+  normalizedRole: ReturnType<typeof normalizeRole>
+): ProfileCompletionState {
+  const nameComplete =
+    hasNonEmptyString(profile?.full_name) ||
+    hasNonEmptyString(profile?.first_name) ||
+    hasNonEmptyString(profile?.last_name);
+  const locationComplete = hasNonEmptyString(profile?.location);
+  const bioComplete = hasNonEmptyString(profile?.bio);
+  const avatarComplete = hasNonEmptyString(profile?.avatar_url);
+  const roleSpecificComplete =
+    normalizedRole === "investor"
+      ? normalizedStringList(profile?.mentor_expertise).length > 0
+      : normalizedStringList(profile?.interest_sectors).length > 0;
+
+  const checks = [nameComplete, locationComplete, bioComplete, avatarComplete, roleSpecificComplete];
+  const total = checks.length;
+  const completed = checks.filter(Boolean).length;
+  const remaining = Math.max(total - completed, 0);
+  const remainingPercent = total === 0 ? 0 : Math.round((remaining / total) * 100);
+
+  return {
+    show: remaining > 0,
+    remainingPercent,
+    completed,
+    total,
+  };
+}
 
 export function DashboardWelcome() {
   const [firstName, setFirstName] = useState<string>("there");
@@ -88,6 +146,12 @@ export function DashboardWelcome() {
   const [exploreHint, setExploreHint] = useState<string | null>(null);
   const [hideMyProjectsSection, setHideMyProjectsSection] = useState(false);
   const [isFounderLikeView, setIsFounderLikeView] = useState(true);
+  const [profileCompletion, setProfileCompletion] = useState<ProfileCompletionState>({
+    show: false,
+    remainingPercent: 0,
+    completed: 0,
+    total: 5,
+  });
   const [selectedMentor, setSelectedMentor] = useState<RecommendedMentor | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -131,11 +195,25 @@ export function DashboardWelcome() {
         return;
       }
 
-      const profileRes = await supabase
+      const primaryProfileRes = await supabase
         .from("profiles")
-        .select("first_name, role, interest_sectors, mentor_expertise")
+        .select(
+          "first_name, last_name, full_name, avatar_url, location, bio, role, interest_sectors, mentor_expertise"
+        )
         .eq("id", user.id)
         .maybeSingle();
+
+      const profileRes =
+        primaryProfileRes.error &&
+        /column/i.test(primaryProfileRes.error.message) &&
+        (/does not exist/i.test(primaryProfileRes.error.message) ||
+          /schema cache/i.test(primaryProfileRes.error.message))
+          ? await supabase
+              .from("profiles")
+              .select("first_name, role, interest_sectors, mentor_expertise")
+              .eq("id", user.id)
+              .maybeSingle()
+          : primaryProfileRes;
 
       if (cancelled) return;
 
@@ -144,18 +222,12 @@ export function DashboardWelcome() {
         setProjectsLoading(false);
       }
 
-      const profile = profileRes.data as
-        | {
-            first_name?: string | null;
-            role?: string | null;
-            interest_sectors?: unknown;
-            mentor_expertise?: unknown;
-          }
-        | null;
+      const profile = (profileRes.data as DashboardProfileRow | null) ?? null;
       const first = profile?.first_name?.trim() || "there";
       const normalized = normalizeRole(profile?.role ?? null);
       const isFounderLike = normalized === "founder";
       const hideProjectsUi = normalized === "investor";
+      setProfileCompletion(computeProfileCompletion(profile, normalized));
 
       const [
         ideasCountRes,
@@ -605,6 +677,27 @@ export function DashboardWelcome() {
           </Link>
         </div>
       </div>
+
+      {profileCompletion.show && (
+        <section className="rounded-xl border border-purple-200 bg-[#F6F2FF] p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold text-[#33265C]">Complete your profile</h3>
+              <p className="mt-1 text-sm text-[#5B4C88]">
+                {profileCompletion.remainingPercent}% remaining to finish (
+                {profileCompletion.completed}/{profileCompletion.total} completed).
+              </p>
+            </div>
+            <Link
+              href="/settings"
+              className="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
+              style={{ backgroundColor: THEME.primary }}
+            >
+              Proceed to profile
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Stat cards */}
       <div
