@@ -4,8 +4,24 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET_ID = "project-media";
 
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+/** Browsers often send empty type or octet-stream for camera / WhatsApp exports. */
+function normalizeImageMimeType(file: File): string | null {
+  let t = (file.type || "").trim().toLowerCase();
+  if (t === "image/jpg" || t === "image/pjpeg") t = "image/jpeg";
+  if (ALLOWED_MIME.has(t)) return t;
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+
+  return null;
 }
 
 async function ensureProjectMediaBucket() {
@@ -44,9 +60,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
   }
 
-  const type = file.type || "";
-  if (!["image/jpeg", "image/png", "image/webp"].includes(type)) {
-    return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
+  const contentType = normalizeImageMimeType(file);
+  if (!contentType) {
+    return NextResponse.json(
+      { error: "Unsupported file type (use JPG, PNG, or WebP)" },
+      { status: 400 }
+    );
   }
   if (file.size > 5 * 1024 * 1024) {
     return NextResponse.json({ error: "File too large (max 5MB)" }, { status: 400 });
@@ -57,7 +76,7 @@ export async function POST(request: Request) {
     const path = `${user.id}/${kind}/${Date.now()}-${sanitizeFilename(file.name)}`;
     const { error: uploadError } = await admin.storage.from(BUCKET_ID).upload(path, file, {
       upsert: false,
-      contentType: type || undefined,
+      contentType,
     });
     if (uploadError) {
       return NextResponse.json({ error: uploadError.message }, { status: 400 });

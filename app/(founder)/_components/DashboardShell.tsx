@@ -12,9 +12,6 @@ import { avatarInitials } from "@/lib/user-display";
 
 const SIDEBAR_ID = "dashboard-sidebar";
 
-/** Dark dashboard chrome (sidebar + top bar) */
-const DASH_NAV_BG = "#241f32";
-
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "grid" },
   { href: "/explore-ideas", label: "Explore Ideas", icon: "eye" },
@@ -142,13 +139,11 @@ export function DashboardShell({
           .maybeSingle()
           .then(({ data }) => {
             setNormalizedRole(normalizeRole((data as { role?: string | null } | null)?.role ?? null));
-            if (data?.first_name)
-              setUserDisplay(
-                data.last_name
-                  ? `${data.first_name} ${data.last_name.slice(0, 5)}${data.last_name.length > 5 ? "..." : ""}`
-                  : data.first_name
-              );
-            else setUserDisplay("Founder");
+            if (data?.first_name) {
+              const first = data.first_name.trim();
+              const last = (data.last_name ?? "").trim();
+              setUserDisplay(last ? `${first} ${last}` : first);
+            } else setUserDisplay("Founder");
           });
       }
     });
@@ -198,7 +193,7 @@ export function DashboardShell({
         className={`fixed inset-y-0 left-0 z-30 w-[min(280px,85vw)] md:w-60 lg:w-64 shrink-0 border-b md:border-b-0 md:border-r border-[#3d3550] flex flex-col md:min-h-screen transform transition-transform duration-200 ease-out ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
-        style={{ backgroundColor: DASH_NAV_BG }}
+        style={{ backgroundColor: THEME.founderNavBg }}
       >
         <div className="p-3 sm:p-4 border-b border-[#3d3550] flex items-center justify-between">
           <Logo variant="dashboard" className="mb-0" />
@@ -250,8 +245,8 @@ export function DashboardShell({
               {avatarInitials(userDisplay)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#f0ecff] truncate">{userDisplay}</p>
-              <p className="text-xs text-[#9a91b8]">Founder Portal</p>
+              <p className="text-sm font-medium text-[#f0ecff] wrap-break-word leading-snug">{userDisplay}</p>
+              <p className="text-xs text-[#9a91b8] mt-0.5">Founder Portal</p>
             </div>
             <svg className="w-4 h-4 text-[#b8aed4] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -270,7 +265,7 @@ export function DashboardShell({
         {/* Top header bar (non-sticky; main scrolls) */}
         <header
           className="shrink-0 z-10 flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 border-b border-[#3d3550] shadow-sm min-h-[52px]"
-          style={{ backgroundColor: DASH_NAV_BG }}
+          style={{ backgroundColor: THEME.founderNavBg }}
         >
           <button
             type="button"
@@ -312,7 +307,7 @@ export function DashboardShell({
             <div className="relative ml-1" ref={headerMenuRef}>
               <button
                 type="button"
-                className="relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa] focus-visible:ring-offset-2 focus-visible:ring-offset-[#241f32]"
+                className="relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa] focus-visible:ring-offset-2 focus-visible:ring-offset-[#231F31]"
                 aria-expanded={headerAccountOpen}
                 aria-haspopup="menu"
                 aria-label="Account menu"
@@ -324,7 +319,11 @@ export function DashboardShell({
                 <div className="w-9 h-9 rounded-full bg-[#5A2D8F]/50 border border-white/15 flex items-center justify-center text-sm font-semibold text-white">
                   {avatarInitials(userDisplay)}
                 </div>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#241f32] pointer-events-none" aria-hidden />
+                <span
+                  className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 pointer-events-none"
+                  style={{ borderColor: THEME.founderNavBg }}
+                  aria-hidden
+                />
               </button>
               <AccountDropdown
                 open={headerAccountOpen}

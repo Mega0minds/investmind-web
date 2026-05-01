@@ -80,14 +80,14 @@ function ExploreProjectCard({
 
   return (
     <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0 flex flex-col">
-      <div className="relative h-24 sm:h-28 md:h-32 shrink-0 bg-linear-to-br from-teal-500/15 to-emerald-600/15">
+      <div className="relative h-36 sm:h-40 md:h-44 shrink-0 bg-gray-100">
         {coverUrl ? (
           <Image
             src={coverUrl}
             alt={title}
             fill
             unoptimized
-            className="object-cover"
+            className="object-cover object-center"
             sizes="(max-width: 640px) 100vw, 400px"
           />
         ) : null}

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { safeGetSession } from "@/lib/supabase/safe-auth";
 import { THEME } from "@/lib/constants";
 import { FOUNDER_INTEREST_SECTOR_OPTIONS } from "@/lib/mentor-matching";
+import { projectMediaPublicUrl } from "@/lib/project-media-url";
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
 
@@ -144,7 +145,9 @@ export function UploadProjectWizard() {
   const [listingStatus, setListingStatus] = useState<"draft" | "published" | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [showSubmitSuccessModal, setShowSubmitSuccessModal] = useState(false);
-  const [mediaUploading, setMediaUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [screenshotsUploading, setScreenshotsUploading] = useState(false);
+  const mediaUploading = coverUploading || screenshotsUploading;
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [screenshotPreviewUrls, setScreenshotPreviewUrls] = useState<string[]>([]);
@@ -477,6 +480,9 @@ export function UploadProjectWizard() {
         userId,
       });
     }
+    const UPLOAD_TIMEOUT_MS = 120_000;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
     try {
       const form = new FormData();
       form.set("kind", kind);
@@ -484,7 +490,9 @@ export function UploadProjectWizard() {
       const res = await fetch("/api/storage/project-media/upload", {
         method: "POST",
         body: form,
+        signal: controller.signal,
       });
+      window.clearTimeout(timeoutId);
       const payload = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
       if (!res.ok || !payload.path) {
         const message = payload.error || "Image upload failed. Please try again.";
@@ -507,7 +515,10 @@ export function UploadProjectWizard() {
       }
       return payload.path;
     } catch (error) {
-      setMediaError("Image upload failed. Please try again.");
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      setMediaError(
+        aborted ? "Upload timed out. Check your connection and try again." : "Image upload failed. Please try again."
+      );
       console.error("[UploadProjectWizard] storage upload exception", {
         kind,
         name: file.name,
@@ -516,6 +527,8 @@ export function UploadProjectWizard() {
         error,
       });
       return null;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 
@@ -533,6 +546,13 @@ export function UploadProjectWizard() {
     ],
     []
   );
+
+  const coverImageDisplaySrc = useMemo(() => {
+    if (coverPreviewUrl) return coverPreviewUrl;
+    const key = draft.coverImageFileName.trim();
+    if (!key) return null;
+    return projectMediaPublicUrl(key);
+  }, [coverPreviewUrl, draft.coverImageFileName]);
 
   const isStep1Valid = Boolean(
     draft.projectName.trim() && draft.tagline.trim() && draft.shortDescription.trim()
@@ -799,7 +819,7 @@ export function UploadProjectWizard() {
                 <label className="block text-sm font-semibold text-gray-700">Cover Image</label>
                 <span className="text-[11px] text-gray-500">Required • 16:9 ratio</span>
               </div>
-              <label className="block rounded-2xl border border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition p-8 text-center cursor-pointer">
+              <label className="relative block rounded-2xl border border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition p-8 text-center cursor-pointer overflow-hidden">
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -811,31 +831,45 @@ export function UploadProjectWizard() {
                     void (async () => {
                       setMediaError(null);
                       if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
-                      setCoverPreviewUrl(URL.createObjectURL(file));
-                      setMediaUploading(true);
-                      const path = await uploadProjectMediaFile(file, "cover");
-                      if (path) {
-                        const supabase = createClient();
-                        if (draft.coverImageFileName) {
-                          await supabase.storage.from("project-media").remove([draft.coverImageFileName]);
+                      const nextPreviewUrl = URL.createObjectURL(file);
+                      setCoverPreviewUrl(nextPreviewUrl);
+                      setCoverUploading(true);
+                      try {
+                        const path = await uploadProjectMediaFile(file, "cover");
+                        if (path) {
+                          const oldCoverKey = draft.coverImageFileName;
+                          if (oldCoverKey) {
+                            const supabase = createClient();
+                            void supabase.storage
+                              .from("project-media")
+                              .remove([oldCoverKey])
+                              .then(({ error }) => {
+                                if (error) {
+                                  console.warn("[UploadProjectWizard] remove old cover failed (non-blocking)", error);
+                                }
+                              });
+                          }
+                          setDraft((d) => ({ ...d, coverImageFileName: path }));
+                        } else {
+                          console.error("[UploadProjectWizard] cover upload returned null path");
+                          URL.revokeObjectURL(nextPreviewUrl);
+                          setCoverPreviewUrl(null);
+                          // `uploadProjectMediaFile` already set `mediaError` from the API when possible
                         }
-                        setDraft((d) => ({ ...d, coverImageFileName: path }));
-                      } else {
-                        console.error("[UploadProjectWizard] cover upload returned null path");
-                        setMediaError("Cover image upload failed. Please try again.");
+                      } finally {
+                        setCoverUploading(false);
                       }
-                      setMediaUploading(false);
                     })();
                   }}
                 />
-                {coverPreviewUrl ? (
+                {coverImageDisplaySrc ? (
                   <Image
-                    src={coverPreviewUrl}
+                    src={coverImageDisplaySrc}
                     alt="Cover preview"
                     width={640}
                     height={360}
                     unoptimized
-                    className="mx-auto mb-3 max-h-40 w-auto rounded-xl border border-gray-200 object-cover"
+                    className="mx-auto mb-3 max-h-40 w-auto rounded-xl border border-gray-200 object-contain"
                   />
                 ) : (
                   <div
@@ -849,10 +883,17 @@ export function UploadProjectWizard() {
                 )}
                 <p className="mt-3 text-sm font-semibold text-gray-800">Upload Cover Image</p>
                 <p className="text-xs text-gray-500 mt-1">Drag and drop or click to browse. Supports JPG, PNG (max 5MB).</p>
-                {draft.coverImageFileName && (
-                  <p className="text-xs text-[#5A2D8F] mt-2 font-medium">{draft.coverImageFileName}</p>
-                )}
                 {mediaError && <p className="text-xs text-red-600 mt-2">{mediaError}</p>}
+                {coverUploading ? (
+                  <div
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/80 backdrop-blur-[2px]"
+                    aria-live="polite"
+                    aria-busy="true"
+                  >
+                    <span className="h-10 w-10 rounded-full border-2 border-[#5A2D8F] border-t-transparent animate-spin" />
+                    <span className="text-sm font-semibold text-gray-800">Uploading image…</span>
+                  </div>
+                ) : null}
               </label>
             </div>
 
@@ -877,56 +918,83 @@ export function UploadProjectWizard() {
                       const remainingSlots = Math.max(0, 5 - draft.screenshotFileNames.length);
                       const toAdd = files.slice(0, remainingSlots);
                       if (!toAdd.length) return;
-                      setMediaUploading(true);
-                      const uploaded = await Promise.all(
-                        toAdd.map((file) => uploadProjectMediaFile(file, "screenshots"))
-                      );
-                      const validPaths = uploaded.filter((p): p is string => Boolean(p));
-                      if (!validPaths.length) {
-                        console.error("[UploadProjectWizard] screenshot upload failed for all selected files", {
-                          selectedCount: toAdd.length,
-                        });
+                      setScreenshotsUploading(true);
+                      try {
+                        const uploaded = await Promise.all(
+                          toAdd.map((file) => uploadProjectMediaFile(file, "screenshots"))
+                        );
+                        const validPaths = uploaded.filter((p): p is string => Boolean(p));
+                        if (!validPaths.length) {
+                          console.error("[UploadProjectWizard] screenshot upload failed for all selected files", {
+                            selectedCount: toAdd.length,
+                          });
+                        }
+                        if (validPaths.length) {
+                          setDraft((d) => ({
+                            ...d,
+                            screenshotFileNames: [...d.screenshotFileNames, ...validPaths],
+                          }));
+                          setScreenshotPreviewUrls((prev) => [
+                            ...prev,
+                            ...toAdd.slice(0, validPaths.length).map((f) => URL.createObjectURL(f)),
+                          ]);
+                        }
+                        if (validPaths.length !== toAdd.length) {
+                          setMediaError("Some screenshots failed to upload. Please retry.");
+                        }
+                      } finally {
+                        setScreenshotsUploading(false);
+                        input.value = "";
                       }
-                      if (validPaths.length) {
-                        setDraft((d) => ({
-                          ...d,
-                          screenshotFileNames: [...d.screenshotFileNames, ...validPaths],
-                        }));
-                        setScreenshotPreviewUrls((prev) => [
-                          ...prev,
-                          ...toAdd.slice(0, validPaths.length).map((f) => URL.createObjectURL(f)),
-                        ]);
-                      }
-                      if (validPaths.length !== toAdd.length) {
-                        setMediaError("Some screenshots failed to upload. Please retry.");
-                      }
-                      setMediaUploading(false);
-                      input.value = "";
                     })();
                   }}
                 />
                 Add Screens
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="relative grid grid-cols-3 gap-3">
+                {screenshotsUploading ? (
+                  <div
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-xl bg-white/80 backdrop-blur-[2px]"
+                    aria-live="polite"
+                    aria-busy="true"
+                  >
+                    <span className="h-9 w-9 rounded-full border-2 border-[#5A2D8F] border-t-transparent animate-spin" />
+                    <span className="text-xs font-semibold text-gray-800">Uploading images…</span>
+                  </div>
+                ) : null}
                 {draft.screenshotFileNames.map((path, i) => {
                   const preview = screenshotPreviewUrls[i];
-                  const displayName = path.split("/").pop() ?? path;
+                  const imgSrc = preview ?? projectMediaPublicUrl(path);
                   return (
                     <div
                       key={`${path}-${i}`}
-                      className="relative aspect-4/3 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-[11px] text-gray-500 p-2 text-center overflow-hidden"
+                      className="relative aspect-4/3 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-[11px] text-gray-500 overflow-hidden"
                     >
-                      {preview ? (
+                      {imgSrc ? (
                         <Image
-                          src={preview}
-                          alt={displayName || `Screenshot ${i + 1}`}
+                          src={imgSrc}
+                          alt={`Screenshot ${i + 1}`}
                           fill
                           unoptimized
                           sizes="(max-width: 768px) 33vw, 200px"
                           className="object-cover"
                         />
                       ) : (
-                        <span className="px-2">{displayName}</span>
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-[#5A2D8F]"
+                          style={{ backgroundColor: "#EFE7FC" }}
+                          role="img"
+                          aria-label={`Screenshot ${i + 1}, preview unavailable`}
+                        >
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </div>
                       )}
                       <button
                         type="button"
@@ -973,31 +1041,34 @@ export function UploadProjectWizard() {
                           const remainingSlots = Math.max(0, 5 - draft.screenshotFileNames.length);
                           const toAdd = files.slice(0, remainingSlots);
                           if (!toAdd.length) return;
-                          setMediaUploading(true);
-                          const uploaded = await Promise.all(
-                            toAdd.map((file) => uploadProjectMediaFile(file, "screenshots"))
-                          );
-                          const validPaths = uploaded.filter((p): p is string => Boolean(p));
-                          if (!validPaths.length) {
-                            console.error("[UploadProjectWizard] screenshot tile upload failed for all selected files", {
-                              selectedCount: toAdd.length,
-                            });
+                          setScreenshotsUploading(true);
+                          try {
+                            const uploaded = await Promise.all(
+                              toAdd.map((file) => uploadProjectMediaFile(file, "screenshots"))
+                            );
+                            const validPaths = uploaded.filter((p): p is string => Boolean(p));
+                            if (!validPaths.length) {
+                              console.error("[UploadProjectWizard] screenshot tile upload failed for all selected files", {
+                                selectedCount: toAdd.length,
+                              });
+                            }
+                            if (validPaths.length) {
+                              setDraft((d) => ({
+                                ...d,
+                                screenshotFileNames: [...d.screenshotFileNames, ...validPaths],
+                              }));
+                              setScreenshotPreviewUrls((prev) => [
+                                ...prev,
+                                ...toAdd.slice(0, validPaths.length).map((f) => URL.createObjectURL(f)),
+                              ]);
+                            }
+                            if (validPaths.length !== toAdd.length) {
+                              setMediaError("Some screenshots failed to upload. Please retry.");
+                            }
+                          } finally {
+                            setScreenshotsUploading(false);
+                            input.value = "";
                           }
-                          if (validPaths.length) {
-                            setDraft((d) => ({
-                              ...d,
-                              screenshotFileNames: [...d.screenshotFileNames, ...validPaths],
-                            }));
-                            setScreenshotPreviewUrls((prev) => [
-                              ...prev,
-                              ...toAdd.slice(0, validPaths.length).map((f) => URL.createObjectURL(f)),
-                            ]);
-                          }
-                          if (validPaths.length !== toAdd.length) {
-                            setMediaError("Some screenshots failed to upload. Please retry.");
-                          }
-                          setMediaUploading(false);
-                          input.value = "";
                         })();
                       }}
                     />

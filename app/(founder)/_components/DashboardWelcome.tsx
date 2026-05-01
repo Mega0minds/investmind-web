@@ -772,14 +772,14 @@ export function DashboardWelcome() {
                 {projectsLoading ? (
                   <>
                     <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse">
-                      <div className="h-28 sm:h-32 bg-gray-200" />
+                      <div className="h-48 sm:h-56 bg-gray-200" />
                       <div className="p-3 sm:p-4 space-y-2">
                         <div className="h-4 bg-gray-200 rounded w-3/4" />
                         <div className="h-3 bg-gray-100 rounded w-full" />
                       </div>
                     </div>
                     <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm min-w-0 animate-pulse hidden sm:block">
-                      <div className="h-28 sm:h-32 bg-gray-200" />
+                      <div className="h-48 sm:h-56 bg-gray-200" />
                       <div className="p-3 sm:p-4 space-y-2">
                         <div className="h-4 bg-gray-200 rounded w-3/4" />
                         <div className="h-3 bg-gray-100 rounded w-full" />
@@ -809,14 +809,14 @@ export function DashboardWelcome() {
                         key={proj.id}
                         className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
                       >
-                        <div className="relative h-28 sm:h-32 bg-linear-to-br from-gray-100 to-gray-200 shrink-0">
+                        <div className="relative h-48 sm:h-56 bg-gray-100 shrink-0">
                           {coverUrl ? (
                             <Image
                               src={coverUrl}
                               alt={title}
                               fill
                               unoptimized
-                              className="object-cover"
+                              className="object-cover object-center"
                               sizes="(max-width: 640px) 100vw, 50vw"
                             />
                           ) : (
@@ -883,7 +883,7 @@ export function DashboardWelcome() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm animate-pulse">
-                    <div className="h-24 bg-gray-200" />
+                    <div className="h-40 sm:h-44 bg-gray-200" />
                     <div className="p-3 space-y-2">
                       <div className="h-4 bg-gray-200 rounded w-2/3" />
                       <div className="h-3 bg-gray-100 rounded w-full" />
@@ -904,14 +904,14 @@ export function DashboardWelcome() {
                       key={idea.id}
                       className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm transition hover:shadow-md min-w-0"
                     >
-                      <div className="relative h-24 bg-linear-to-br from-gray-100 to-gray-200">
+                      <div className="relative h-40 sm:h-44 bg-gray-100">
                         {coverUrl ? (
                           <Image
                             src={coverUrl}
                             alt={title}
                             fill
                             unoptimized
-                            className="object-cover"
+                            className="object-cover object-center"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           />
                         ) : null}

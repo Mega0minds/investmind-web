@@ -11,6 +11,9 @@ export const ROLES = {
 /** Theme colors used by shared UI and feature widgets */
 export const THEME = {
   primary: "#5A2D8F",
+  /** Dashboard sidebar / header chrome (founder shell + marketing header bar) */
+  founderNavBg: "#231F31",
+  founderNavBorder: "#3d3550",
   accent: "#E84989",
   text: "#4A4A4A",
   textMuted: "#6B7280",

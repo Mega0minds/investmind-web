@@ -138,14 +138,14 @@ export default async function FounderListings({
                     key={project.id}
                     className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0"
                   >
-                    <div className="relative h-36 sm:h-40 bg-linear-to-br from-indigo-100 to-violet-200 shrink-0">
+                    <div className="relative h-48 sm:h-56 bg-gray-100 shrink-0">
                       {coverUrl && (
                         <Image
                           src={coverUrl}
                           alt={`${title} cover`}
                           fill
                           unoptimized
-                          className="object-cover"
+                          className="object-cover object-center"
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         />
                       )}
