@@ -107,8 +107,8 @@ export function AdminUserEditForm({ userId, action, initial }: AdminUserEditForm
           <option value="">Unassigned</option>
           <option value="founder">founder</option>
           <option value="innovator">innovator</option>
-          <option value="investor">investor</option>
-          <option value="mentor">mentor</option>
+          <option value="investor">Investor</option>
+          <option value="mentor">Investor (mentor)</option>
           <option value="admin">admin</option>
         </select>
       </div>
@@ -162,7 +162,7 @@ export function AdminUserEditForm({ userId, action, initial }: AdminUserEditForm
       </div>
       <div className="md:col-span-2">
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Mentor expertise (comma separated)
+          Investor expertise (comma separated)
         </label>
         <div className="flex flex-wrap gap-2">
           {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {

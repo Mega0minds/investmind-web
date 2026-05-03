@@ -65,12 +65,12 @@ export function mentorDisplayName(m: MentorProfileRow): string {
   const ln = m.last_name?.trim() ?? "";
   const combined = [fn, ln].filter(Boolean).join(" ").trim();
   if (combined) return combined;
-  return m.full_name?.trim() || "Mentor";
+  return m.full_name?.trim() || "Investor";
 }
 
 export function mentorExpertiseLabel(m: MentorProfileRow, founderKeys: string[]): string {
   const exp = (m.mentor_expertise ?? []).filter((x) => typeof x === "string" && x.trim());
-  if (!exp.length) return "Mentor";
+  if (!exp.length) return "Investor";
   if (!founderKeys.length) return exp.slice(0, 2).join(" · ");
   const founderSet = new Set(founderKeys.map(norm));
   const matched = exp.filter((e) => founderSet.has(norm(e)));

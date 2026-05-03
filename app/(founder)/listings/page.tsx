@@ -221,7 +221,7 @@ export default async function FounderListings({
                 </div>
                 <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Start a New Innovation</h3>
                 <p className="text-xs sm:text-sm text-gray-500 mt-2 max-w-[220px]">
-                  Share your next big idea with mentors and creatives across Africa.
+                  Share your next big idea with investors and creatives across Africa.
                 </p>
               </Link>
             </div>

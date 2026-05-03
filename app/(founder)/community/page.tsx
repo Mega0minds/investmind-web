@@ -269,11 +269,11 @@ export default function CommunityPage() {
               const name =
                 [firstName, lastName].filter(Boolean).join(" ").trim() ||
                 m.full_name?.trim() ||
-                "Mentor";
+                "Investor";
               const expertise =
                 Array.isArray(m.mentor_expertise) && m.mentor_expertise.length > 0
                   ? m.mentor_expertise.slice(0, 2).join(" · ")
-                  : "Mentor";
+                  : "Investor";
               return {
                 id: m.id,
                 name,
@@ -945,10 +945,10 @@ export default function CommunityPage() {
 
             <div className="rounded-2xl bg-sky-50 border border-sky-100 p-4 sm:p-5 min-w-0 md:col-span-2 lg:col-span-1">
               <h3 className="font-bold text-gray-900 text-sm sm:text-base mb-4 wrap-break-word">
-                Mentors matching your profile
+                Investors matching your profile
               </h3>
               {sidebarMentors.length === 0 ? (
-                <p className="text-sm text-gray-500">No mentors available right now.</p>
+                <p className="text-sm text-gray-500">No investors available right now.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {sidebarMentors.map((m) => (

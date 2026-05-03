@@ -1,6 +1,14 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
+import { buildPageMetadata } from "@/lib/seo-metadata";
 import Image from "next/image";
+
+export const metadata = buildPageMetadata({
+  title: "About Us",
+  description:
+    "Learn about InvestMind’s vision and mission: empowering young African innovators with visibility, guidance, funding pathways, and a supportive investor and creative community.",
+  path: "/about",
+});
 
 export default function AboutPage() {
   return (
@@ -27,7 +35,7 @@ export default function AboutPage() {
             <div className="rounded-2xl bg-[#F5F0FA] p-5 sm:p-6">
               <h2 className="text-lg sm:text-xl font-semibold text-[#5A2D8F]">Mission Statement</h2>
               <p className="mt-3 text-sm sm:text-base leading-relaxed text-gray-700">
-                To empower young innovators by providing funding, mentorship, and strategic
+                To empower young innovators by providing funding, guidance, and strategic
                 connections, support their entrepreneurial journey through the right training, safe
                 financial pathways, and structured monitoring systems for sustainable business
                 ventures.
@@ -59,7 +67,7 @@ export default function AboutPage() {
                   <p>
                     With a strong passion for youth development, financial inclusion, and
                     kingdom-driven impact, she is committed to solving one of Africa&apos;s biggest
-                    challenges - the lack of visibility, mentorship, and structured support for
+                    challenges - the lack of visibility, guidance, and structured support for
                     idea-stage innovators.
                   </p>
                   <div>
@@ -67,7 +75,7 @@ export default function AboutPage() {
                     <ul className="mt-2 list-disc pl-5 space-y-1">
                       <li>Promoting financial discipline and investment awareness</li>
                       <li>Supporting young entrepreneurs with guidance and strategy</li>
-                      <li>Building platforms that connect youth, mentors, and investors</li>
+                      <li>Building platforms that connect youth and investors</li>
                     </ul>
                   </div>
                   <p>

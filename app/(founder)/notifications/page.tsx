@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "../_components/DashboardShell";
 import { THEME } from "@/lib/constants";
 
-const TABS = ["All", "Investor Requests", "Mentorship", "Community"] as const;
+const TABS = ["All", "Investor Requests", "Connections", "Community"] as const;
 type Tab = (typeof TABS)[number];
 
 type NotifType = "investor" | "mentorship" | "community" | "moderation" | "social";
@@ -45,7 +45,7 @@ const NOTIFICATIONS: Array<{
 function matchesTab(type: NotifType, tab: Tab): boolean {
   if (tab === "All") return true;
   if (tab === "Investor Requests") return type === "investor";
-  if (tab === "Mentorship") return type === "mentorship";
+  if (tab === "Connections") return type === "mentorship";
   if (tab === "Community") return type === "community" || type === "social";
   return true;
 }
@@ -60,7 +60,7 @@ export default function NotificationsPage() {
         <div className="mb-4 sm:mb-6">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Notifications</h2>
           <p className="text-sm sm:text-base text-gray-500 mt-1 wrap-break-word">
-            Stay updated with your investor requests, mentorships, and community activity.
+            Stay updated with your investor requests, connections, and community activity.
           </p>
         </div>
 
@@ -149,7 +149,7 @@ export default function NotificationsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between gap-2 items-start">
                         <p className="text-sm sm:text-[15px] text-gray-800 wrap-break-word">
-                          Mentor <strong className="font-semibold">Robert Patterson</strong> accepted your mentorship
+                          Investor <strong className="font-semibold">Robert Patterson</strong> accepted your connection request
                           request
                         </p>
                         <time className="text-xs text-gray-400 shrink-0 whitespace-nowrap">{n.time}</time>

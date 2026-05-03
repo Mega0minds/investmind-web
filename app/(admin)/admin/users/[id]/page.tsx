@@ -47,7 +47,7 @@ type AdminViewProject = {
 function prettyRole(role: string | null): string {
   if (!role) return "Unassigned";
   if (role === "founder" || role === "innovator") return "Creative";
-  if (role === "investor" || role === "mentor") return "Mentor";
+  if (role === "investor" || role === "mentor") return "Investor";
   if (role === "admin") return "Admin";
   return role;
 }

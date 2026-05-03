@@ -653,7 +653,7 @@ export function SettingsPageClient({
                 <div className="flex flex-wrap gap-2">
                   {[
                     { value: "founder" as const, label: "Creative" },
-                    { value: "investor" as const, label: "Mentor" },
+                    { value: "investor" as const, label: "Investor" },
                   ].map((option) => {
                     const active = selectedRole === option.value;
                     return (
@@ -673,7 +673,7 @@ export function SettingsPageClient({
                   })}
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Switch between Creative and Mentor. Save changes to apply.
+                  Switch between Creative and Investor. Save changes to apply.
                 </p>
               </div>
               <div>
@@ -820,8 +820,8 @@ export function SettingsPageClient({
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
                   {isFounderRole
-                    ? "Areas you know well — shown on your profile and used to match you with mentors."
-                    : "Areas you can help with — shown on your mentor profile when others browse."}
+                    ? "Areas you know well — shown on your profile and used to match you with investors."
+                    : "Areas you can help with — shown on your investor profile when others browse."}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {
@@ -854,7 +854,7 @@ export function SettingsPageClient({
                     Sectors you care about
                   </label>
                   <p className="text-xs text-gray-500 mb-2">
-                    We use this to recommend mentors who match your interests (along with sectors from your
+                    We use this to recommend investors who match your interests (along with sectors from your
                     projects).
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -887,7 +887,7 @@ export function SettingsPageClient({
                     Interest sectors
                   </label>
                   <p className="text-xs text-gray-500 mb-2">
-                    Sectors you follow or want to engage with — shown as interests on your mentor profile.
+                    Sectors you follow or want to engage with — shown as interests on your investor profile.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {FOUNDER_INTEREST_SECTOR_OPTIONS.map((sector) => {

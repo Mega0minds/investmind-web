@@ -45,7 +45,7 @@ type UserRow = {
 
 function roleLabel(role: string | null): string {
   if (!role) return "Unassigned";
-  if (role === "mentor" || role === "investor") return "Mentor";
+  if (role === "mentor" || role === "investor") return "Investor";
   if (role === "founder" || role === "innovator") return "Creative";
   if (role === "admin") return "Admin";
   return role;
@@ -222,7 +222,7 @@ export default async function AdminDashboard({ searchParams }: AdminDashboardPro
     >
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Total users" value={totalUsers} sub="Active only, excludes admins" />
-              <StatCard label="Total mentors" value={totalMentors} sub="Active only: investor + mentor" />
+              <StatCard label="Total investors" value={totalMentors} sub="Active only: investor + mentor roles" />
               <StatCard label="Total creatives" value={totalCreatives} sub="Active only: founder + innovator" />
               <StatCard label="Total suspended" value={totalSuspended} sub="Users with suspended visibility" />
             </div>
@@ -239,7 +239,7 @@ export default async function AdminDashboard({ searchParams }: AdminDashboardPro
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
                   { key: "all", label: "All Users" },
-                  { key: "mentors", label: "Mentors" },
+                  { key: "mentors", label: "Investors" },
                   { key: "creatives", label: "Creatives" },
                   { key: "suspended", label: "Suspended" },
                 ].map((t) => {

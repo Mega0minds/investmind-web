@@ -32,7 +32,7 @@ function createdDate(s: string | null): string {
 
 function roleLabel(role: string | null): string {
   if (!role) return "Unassigned";
-  if (role === "mentor" || role === "investor") return "Mentor";
+  if (role === "mentor" || role === "investor") return "Investor";
   if (role === "founder" || role === "innovator") return "Creative";
   if (role === "admin") return "Admin";
   return role;
@@ -111,7 +111,7 @@ export default async function AdminConnectionsPage() {
 
         {!mentorshipRequestsEnabled ? (
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Mentorship requests table is not enabled yet. Run `supabase/migrations/008_mentorship_requests.sql`.
+            Connection requests table is not enabled yet. Run `supabase/migrations/008_mentorship_requests.sql`.
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-xl border border-gray-100">

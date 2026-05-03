@@ -49,7 +49,7 @@ function displayName(profile: ProfileRow | undefined): string {
 
 function roleLabel(role: string | null): string {
   if (!role) return "Unassigned";
-  if (role === "mentor" || role === "investor") return "Mentor";
+  if (role === "mentor" || role === "investor") return "Investor";
   if (role === "founder" || role === "innovator") return "Creative";
   if (role === "admin") return "Admin";
   return role;

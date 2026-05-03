@@ -58,22 +58,22 @@ export default async function MentorshipPage({ searchParams }: MentorshipPagePro
       .limit(100);
 
     return (
-      <DashboardShell title="Mentorship Hub">
+      <DashboardShell title="Investor Hub">
         <div className="space-y-8">
           <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900">Mentors</h2>
+            <h2 className="text-lg font-bold text-gray-900">Investors</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Browse mentors and open a profile to connect or read more.
+              Browse investors and open a profile to connect or read more.
             </p>
             {!mentors?.length ? (
-              <p className="mt-4 text-sm text-gray-600">No visible mentors found right now.</p>
+              <p className="mt-4 text-sm text-gray-600">No visible investors found right now.</p>
             ) : (
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {mentors.map((mentor) => {
                   const name =
                     mentor.full_name?.trim() ||
                     [mentor.first_name, mentor.last_name].filter(Boolean).join(" ").trim() ||
-                    "Mentor";
+                    "Investor";
                   const expertise = Array.isArray(mentor.mentor_expertise)
                     ? mentor.mentor_expertise.filter(
                         (item): item is string => typeof item === "string" && item.trim().length > 0
@@ -97,7 +97,7 @@ export default async function MentorshipPage({ searchParams }: MentorshipPagePro
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate">{name}</p>
                           <p className="mt-1 text-xs text-gray-500 line-clamp-2">
-                            {expertise.length ? expertise.slice(0, 2).join(" · ") : "Mentor"}
+                            {expertise.length ? expertise.slice(0, 2).join(" · ") : "Investor"}
                           </p>
                           {mentor.location ? (
                             <p className="mt-1 text-xs text-gray-500 truncate">{mentor.location}</p>
@@ -232,9 +232,9 @@ export default async function MentorshipPage({ searchParams }: MentorshipPagePro
   const name =
     mentor?.full_name?.trim() ||
     [mentor?.first_name, mentor?.last_name].filter(Boolean).join(" ").trim() ||
-    "Mentor";
+    "Investor";
   const normalizedRole = normalizeRole(mentor?.role ?? null);
-  const visibleRole = normalizedRole === "founder" ? "Creative" : "Mentor";
+  const visibleRole = normalizedRole === "founder" ? "Creative" : "Investor";
   const expertise = Array.isArray(mentor?.mentor_expertise)
     ? mentor.mentor_expertise.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
@@ -262,7 +262,7 @@ export default async function MentorshipPage({ searchParams }: MentorshipPagePro
     }
   }
 
-  const profileShellTitle = isCreativeProfile ? "Creative profile" : "Mentor profile";
+  const profileShellTitle = isCreativeProfile ? "Creative profile" : "Investor profile";
 
   return (
     <DashboardShell title={profileShellTitle}>

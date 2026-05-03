@@ -78,7 +78,7 @@ export function MentorProfileConnect({
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Request Mentorship</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Connect with Investor</h3>
                 <p className="mt-1 text-sm text-gray-500">Send a short note to {mentorName}.</p>
               </div>
               <button

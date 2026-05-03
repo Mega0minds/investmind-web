@@ -19,7 +19,7 @@ import { safeGetSession, safeGetUser } from "@/lib/supabase/safe-auth";
 
 const ROLE_OPTIONS = [
   { value: ROLES.FOUNDER, label: "Creative" },
-  { value: ROLES.INVESTOR, label: "Mentor" },
+  { value: ROLES.INVESTOR, label: "Investor/mentor" },
 ] as const;
 
 const AGE_MIN = 13;

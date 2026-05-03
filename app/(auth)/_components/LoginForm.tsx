@@ -13,10 +13,80 @@ type LoginFormProps = {
   adminOnly?: boolean;
 };
 
+type AuthAlert = {
+  body: string;
+  /** warning = connection / temporary; error = credentials or access denied */
+  variant: "warning" | "error";
+};
+
+function isConfigLikeMessage(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes("missing supabase") ||
+    m.includes("next_public_supabase") ||
+    m.includes(".env") ||
+    m.includes("supabase project url") ||
+    m.includes("pooler") ||
+    m.includes("database host") ||
+    m.includes("copy .env") ||
+    m.includes("supabase api") ||
+    m.includes("goto supabase") ||
+    m.includes("settings → api")
+  );
+}
+
+function isNetworkLikeMessage(msg: string): boolean {
+  return /failed to fetch|load failed|networkerror|network request failed/i.test(msg);
+}
+
+function friendlyUnknownMessage(raw: string): string {
+  if (isConfigLikeMessage(raw) || raw.length > 160) {
+    return "Something went wrong. Please try again in a moment.";
+  }
+  return raw;
+}
+
+function AuthFormAlert({ alert }: { alert: AuthAlert }) {
+  const isWarning = alert.variant === "warning";
+  return (
+    <div
+      role="alert"
+      className={`flex gap-3 rounded-xl border px-4 py-3 ${
+        isWarning
+          ? "border-amber-200 bg-amber-50/95 text-amber-950"
+          : "border-red-200 bg-red-50 text-red-900"
+      }`}
+    >
+      <span className="shrink-0 mt-0.5" aria-hidden>
+        {isWarning ? (
+          <svg className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        ) : (
+          <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        )}
+      </span>
+      <p className="text-sm leading-relaxed">{alert.body}</p>
+    </div>
+  );
+}
+
 export function LoginForm({ adminOnly = false }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const [authAlert, setAuthAlert] = useState<AuthAlert | null>(null);
   const [loading, setLoading] = useState(false);
   const [dismissedEmailSentModal, setDismissedEmailSentModal] = useState(false);
   const showEmailSentModal =
@@ -29,7 +99,7 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
+    setAuthAlert(null);
     const form = e.currentTarget;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
@@ -41,11 +111,17 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
       supabase = createClient(rememberMe);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(
-        msg.includes("Missing Supabase env")
-          ? "Server configuration is incomplete. Add NEXT_PUBLIC_SUPABASE_URL and your anon key to .env.local, then restart the dev server."
-          : msg || "Something went wrong. Please try again."
-      );
+      if (isConfigLikeMessage(msg)) {
+        setAuthAlert({
+          body: "Sign-in isn’t available on this copy of the app yet. Try again later, or contact support if you need help.",
+          variant: "warning",
+        });
+      } else {
+        setAuthAlert({
+          body: friendlyUnknownMessage(msg),
+          variant: "error",
+        });
+      }
       setLoading(false);
       return;
     }
@@ -57,24 +133,32 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
       signInError = result.error;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (/failed to fetch/i.test(msg)) {
-        setError(
-          "Cannot reach the sign-in service. Check your internet connection, that NEXT_PUBLIC_SUPABASE_URL and your anon key in .env.local are correct, and that your Supabase project is not paused."
-        );
+      if (isNetworkLikeMessage(msg)) {
+        setAuthAlert({
+          body: "We couldn’t reach our servers. Check your internet connection, then try again. If this keeps happening, wait a minute and retry.",
+          variant: "warning",
+        });
+      } else if (isConfigLikeMessage(msg)) {
+        setAuthAlert({
+          body: "Sign-in isn’t available on this copy of the app yet. Try again later, or contact support if you need help.",
+          variant: "warning",
+        });
       } else {
-        setError(msg || "Something went wrong. Please try again.");
+        setAuthAlert({
+          body: friendlyUnknownMessage(msg),
+          variant: "error",
+        });
       }
       setLoading(false);
       return;
     }
     setLoading(false);
     if (signInError) {
-      const networkLike =
-        /failed to fetch|load failed|networkerror|network request failed/i.test(signInError.message);
-      if (networkLike) {
-        setError(
-          "Cannot reach the sign-in service. Check your internet connection, that NEXT_PUBLIC_SUPABASE_URL and your anon key in .env.local are correct, and that your Supabase project is not paused."
-        );
+      if (isNetworkLikeMessage(signInError.message)) {
+        setAuthAlert({
+          body: "We couldn’t reach our servers. Check your internet connection, then try again. If this keeps happening, wait a minute and retry.",
+          variant: "warning",
+        });
         return;
       }
       if (signInError.message === "Invalid login credentials") {
@@ -89,14 +173,23 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
             checked?: boolean;
           };
           if (data.checked === true && data.exists === false) {
-            setError("This email isn't registered. Sign up to create an account.");
+            setAuthAlert({
+              body: "This email isn’t registered yet. Create an account to get started.",
+              variant: "error",
+            });
             return;
           }
         }
-        setError("Incorrect password. Try again or use Forgot password.");
+        setAuthAlert({
+          body: "That password doesn’t match this account. Try again or use Forgot password.",
+          variant: "error",
+        });
         return;
       }
-      setError(signInError.message);
+      setAuthAlert({
+        body: friendlyUnknownMessage(signInError.message),
+        variant: "error",
+      });
       return;
     }
     const userId = signInData.user?.id;
@@ -114,13 +207,19 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
     if (adminOnly) {
       if (profile?.role !== "admin") {
         await supabase.auth.signOut();
-        setError("This login is for company admins only.");
+        setAuthAlert({
+          body: "This portal is for company admins only. Use the regular sign-in if you have a member account.",
+          variant: "error",
+        });
         return;
       }
       const approval = profile.admin_approval_status ?? "none";
       if (approval === "rejected") {
         await supabase.auth.signOut();
-        setError("Your admin access was not approved.");
+        setAuthAlert({
+          body: "Your admin access wasn’t approved. Contact your organization if you think this is a mistake.",
+          variant: "error",
+        });
         return;
       }
       if (approval !== "approved") {
@@ -198,11 +297,7 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
         onSubmit={handleSubmit}
         noValidate
       >
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-            {error}
-          </p>
-        )}
+        {authAlert ? <AuthFormAlert alert={authAlert} /> : null}
         <Input
           label="Email"
           type="email"

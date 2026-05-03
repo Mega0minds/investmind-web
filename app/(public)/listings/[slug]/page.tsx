@@ -1,14 +1,65 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { createClient } from "@/lib/supabase/server";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
+import { SEO_SITE_NAME } from "@/lib/seo-metadata";
+import { getSiteUrlForMetadata } from "@/lib/site-url";
 import { DashboardShell } from "@/app/(founder)/_components/DashboardShell";
 
 type ListingDetailsProps = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: ListingDetailsProps): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = await createClient();
+  const { data: project } = await supabase
+    .from("projects")
+    .select("project_name, tagline, short_description, sector, subcategory, cover_image_file_name, updated_at")
+    .eq("id", slug)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (!project) {
+    return { title: `Project | ${SEO_SITE_NAME}`, robots: { index: false, follow: false } };
+  }
+
+  const name = project.project_name?.trim() || "Published idea";
+  const tagline = project.tagline?.trim();
+  const short = project.short_description?.trim();
+  const parts = [project.sector, project.subcategory].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  const topic = parts.length ? ` · ${parts.join(" · ")}` : "";
+  const rawDesc = tagline || short || `Discover this idea on ${SEO_SITE_NAME}${topic}.`;
+  const description = rawDesc.length > 160 ? `${rawDesc.slice(0, 157)}…` : rawDesc;
+  const base = getSiteUrlForMetadata();
+  const canonicalPath = `/listings/${slug}`;
+  const canonical = base ? new URL(canonicalPath, base).href : undefined;
+  const ogImage = projectMediaPublicUrl(project.cover_image_file_name);
+
+  return {
+    title: name,
+    description,
+    alternates: canonical ? { canonical } : undefined,
+    openGraph: {
+      title: `${name} | ${SEO_SITE_NAME}`,
+      description,
+      url: canonical,
+      siteName: SEO_SITE_NAME,
+      type: "article",
+      publishedTime: project.updated_at ?? undefined,
+      images: ogImage ? [{ url: ogImage, alt: name }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${name} | ${SEO_SITE_NAME}`,
+      description,
+      images: ogImage ? [ogImage] : undefined,
+    },
+  };
+}
 
 function formatTeamSize(value: string | null): string {
   const trimmed = value?.trim();

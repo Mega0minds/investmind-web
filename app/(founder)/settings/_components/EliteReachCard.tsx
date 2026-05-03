@@ -10,14 +10,14 @@ export type EliteReachStats = {
 };
 
 function badgeLabel(role: SettingsEliteRole): string {
-  if (role === "investor") return "MENTOR ELITE STATUS";
+  if (role === "investor") return "INVESTOR ELITE STATUS";
   if (role === "founder") return "CREATIVE ELITE STATUS";
   return "ELITE STATUS";
 }
 
 function audiencePlural(role: SettingsEliteRole): string {
   if (role === "investor") return "creatives";
-  if (role === "founder") return "mentors";
+  if (role === "founder") return "investors";
   return "people";
 }
 

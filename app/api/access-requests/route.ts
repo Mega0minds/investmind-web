@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       : "";
 
   if (!mentorId || mentorId === user.id) {
-    return NextResponse.json({ error: "Invalid mentorId" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid recipient profile." }, { status: 400 });
   }
   if (message.length < 5 || message.length > 300) {
     return NextResponse.json(
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   if (existing) {
     return NextResponse.json(
-      { error: "You already have an active request for this mentor." },
+      { error: "You already have an active request for this investor." },
       { status: 409 }
     );
   }
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Mentorship requests are not enabled yet. Run supabase/migrations/008_mentorship_requests.sql.",
+            "Connection requests are not enabled yet. Run supabase/migrations/008_mentorship_requests.sql.",
         },
         { status: 503 }
       );

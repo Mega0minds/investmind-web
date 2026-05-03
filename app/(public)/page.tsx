@@ -1,13 +1,48 @@
+import type { Metadata } from "next";
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { FaqAccordion } from "@/components/public/FaqAccordion";
+import { HomeJsonLd } from "@/components/seo/HomeJsonLd";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchExploreProjects, type ExplorePublishedProject } from "@/lib/explore-projects";
 import { projectMediaPublicUrl } from "@/lib/project-media-url";
+import { SEO_HOMEPAGE_DESCRIPTION, SEO_KEYWORDS, SEO_SITE_NAME } from "@/lib/seo-metadata";
+import { getSiteUrlForMetadata } from "@/lib/site-url";
 import Image from "next/image";
 
 export const revalidate = 60;
+
+const siteBase = getSiteUrlForMetadata();
+
+export const metadata: Metadata = {
+  title: { absolute: `${SEO_SITE_NAME} — African Youth Innovators, Investors & Ideas` },
+  description: SEO_HOMEPAGE_DESCRIPTION,
+  keywords: [...SEO_KEYWORDS, "fund African startups", "creative entrepreneurs Africa"],
+  alternates: siteBase ? { canonical: siteBase.href } : undefined,
+  openGraph: {
+    title: `${SEO_SITE_NAME} — African Youth Innovators, Investors & Ideas`,
+    description: SEO_HOMEPAGE_DESCRIPTION,
+    url: siteBase?.href,
+    siteName: SEO_SITE_NAME,
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: "/assets/home.png",
+        width: 1200,
+        height: 630,
+        alt: `${SEO_SITE_NAME} — ideas, investors, and community for young innovators in Africa`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SEO_SITE_NAME} — African Youth Innovators, Investors & Ideas`,
+    description: SEO_HOMEPAGE_DESCRIPTION,
+    images: ["/assets/home.png"],
+  },
+};
 
 type LandingCard = {
   id: string;
@@ -91,6 +126,7 @@ export default async function Landing() {
 
   return (
     <div className="min-w-0 overflow-x-hidden">
+      <HomeJsonLd siteOrigin={siteBase?.origin} />
       {/* First section: Hero */}
       <div className="min-h-screen relative">
         <section
@@ -123,8 +159,8 @@ export default async function Landing() {
               style={{ lineHeight: 1.75 }}
             >
               Across Africa, brilliant ideas struggle without exposure or
-              mentorship. InvestMind bridges that gap by connecting young
-              creatives and inventors with mentors and a supportive community.
+              guidance. InvestMind bridges that gap by connecting young
+              creatives and inventors with investors and a supportive community.
             </p>
           </div>
         </section>
@@ -264,7 +300,7 @@ export default async function Landing() {
             Ready to Turn Your Idea Into Reality?
           </h2>
           <p className="text-white/90 text-sm sm:text-base md:text-lg mb-6 sm:mb-8 px-2">
-            Join InvestMind and connect with mentors, creatives, and a community that believes in you.
+            Join InvestMind and connect with investors, creatives, and a community that believes in you.
           </p>
           <a
             href="/signup"

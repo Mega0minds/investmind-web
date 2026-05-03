@@ -120,7 +120,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const [userDisplay, setUserDisplay] = useState<string>("Founder");
-  /** Used to hide founder-only nav (e.g. My Projects) for mentors. */
+  /** Used to hide founder-only nav (e.g. My Projects) for investors. */
   const [normalizedRole, setNormalizedRole] = useState<CanonicalRole | "unknown" | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
@@ -289,7 +289,7 @@ export function DashboardShell({
               <input
                 type="search"
                 placeholder="Search..."
-                title="Search for mentors, creatives or ideas"
+                title="Search for investors, creatives or ideas"
                 className="w-full min-w-0 rounded-lg sm:rounded-xl border border-[#4a4160] bg-[#1a1626] py-2 sm:py-2.5 pl-8 sm:pl-10 pr-3 text-xs sm:text-sm text-[#f0ecff] placeholder:text-[#7a7194] focus:border-[#5A2D8F] focus:ring-1 focus:ring-[#5A2D8F]/60 outline-none transition"
               />
             </label>

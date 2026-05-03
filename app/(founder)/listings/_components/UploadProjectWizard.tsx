@@ -667,7 +667,7 @@ export function UploadProjectWizard() {
             {isEditMode ? "Edit Your Project" : "Upload Your Project"}
           </h1>
           <p className="text-sm text-gray-500 mt-2">
-            Share your idea with mentors and other creatives. Add details so they can understand your vision.
+            Share your idea with investors and other creatives. Add details so they can understand your vision.
           </p>
         </div>
       </div>
@@ -1334,7 +1334,7 @@ export function UploadProjectWizard() {
             </div>
             <h3 className="text-lg font-bold text-gray-900 text-center">Project published</h3>
             <p className="mt-2 text-sm text-gray-600 text-center">
-              Your project is live for mentors and the community. You can keep editing from your
+              Your project is live for investors and the community. You can keep editing from your
               listings anytime.
             </p>
             <button

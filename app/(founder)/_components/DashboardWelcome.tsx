@@ -84,7 +84,7 @@ type DashboardCachedPayload = {
   requestedMentorIds: string[];
   exploreIdeas: DashboardExploreIdeaRow[];
   exploreHint: string | null;
-  /** Mentors (investor role) should not see founder project UI on the dashboard. */
+  /** Investors (investor role) should not see founder project UI on the dashboard. */
   hideMyProjectsSection: boolean;
   isFounderLike: boolean;
 };
@@ -132,8 +132,8 @@ export function DashboardWelcome() {
   const [firstName, setFirstName] = useState<string>("there");
   const [statCards, setStatCards] = useState<StatCard[]>([
     { label: "Ideas Submitted", value: "0", icon: "bulb", color: "blue" },
-    { label: "Mentor Requests", value: "0", icon: "doc", color: "purple" },
-    { label: "Mentor Connections", value: "0", icon: "chat", color: "purple" },
+    { label: "Investor Requests", value: "0", icon: "doc", color: "purple" },
+    { label: "Investor Connections", value: "0", icon: "chat", color: "purple" },
   ]);
   const [dashboardProjects, setDashboardProjects] = useState<DashboardProjectRow[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -167,7 +167,7 @@ export function DashboardWelcome() {
       setStatCards(
         payload.statCards.map((card) => ({
           ...card,
-          label: card.label.replace("Mentot", "Mentor"),
+          label: card.label.replace("Mentot", "Investor"),
         }))
       );
       setDashboardProjects(payload.dashboardProjects);
@@ -310,13 +310,13 @@ export function DashboardWelcome() {
               color: "blue",
             },
             {
-              label: "Mentor Requests",
+              label: "Investor Requests",
               value: String(requestCount),
               icon: "doc",
               color: "purple",
             },
             {
-              label: "Mentor Connections",
+              label: "Investor Connections",
               value: String(connectionCount),
               icon: "chat",
               color: "purple",
@@ -382,7 +382,7 @@ export function DashboardWelcome() {
         mentorsHint = mentorRowsRes.error
           ? null
           : isFounderLike
-            ? "No mentor profiles yet. Mentors appear here when they join with matching expertise."
+            ? "No investor profiles yet. Investors appear here when they join with matching expertise."
             : "No creative profiles yet.";
       } else {
         const rows = mentorRowsRes.data as Array<{
@@ -402,11 +402,11 @@ export function DashboardWelcome() {
             .sort((a, b) => b.score - a.score);
           let list = scored;
           if (!list.length && founderKeys.length && mentorRows.length) {
-            mentorsHint = "No mentors listed in your sectors yet. Try more interests in Settings.";
+            mentorsHint = "No investors listed in your sectors yet. Try more interests in Settings.";
             list = mentorRows.slice(0, 5).map((m) => ({ m, score: 0 }));
           } else if (!list.length && !founderKeys.length && mentorRows.length) {
             mentorsHint =
-              "Choose sectors you care about in Settings, or add a project—we’ll match mentors to those categories.";
+              "Choose sectors you care about in Settings, or add a project—we’ll match investors to those categories.";
             list = mentorRows.slice(0, 5).map((m) => ({ m, score: 0 }));
           }
           mentors = list
@@ -539,7 +539,7 @@ export function DashboardWelcome() {
 
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        throw new Error(data?.error || "Could not send mentorship request.");
+        throw new Error(data?.error || "Could not send connection request.");
       }
 
       setRequestedMentorIds((prev) =>
@@ -548,7 +548,7 @@ export function DashboardWelcome() {
       setSelectedMentor(null);
       setRequestMessage("");
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "Could not send mentorship request.");
+      setRequestError(error instanceof Error ? error.message : "Could not send connection request.");
     } finally {
       setRequestingMentorId(null);
     }
@@ -558,7 +558,7 @@ export function DashboardWelcome() {
     <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm min-w-0">
       <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-          {isFounderLikeView ? "Recommended Mentors" : "Recommended Creatives"}
+          {isFounderLikeView ? "Recommended Investors" : "Recommended Creatives"}
         </h3>
         <Link
           href="/mentorship"
@@ -570,11 +570,11 @@ export function DashboardWelcome() {
       </div>
       {mentorsHint && <p className="text-xs text-gray-500 mb-3 wrap-break-word">{mentorsHint}</p>}
       {mentorsLoading ? (
-        <p className="text-sm text-gray-500">Loading mentors…</p>
+        <p className="text-sm text-gray-500">Loading investors…</p>
       ) : mentors.length === 0 ? (
         <p className="text-sm text-gray-500">
           {isFounderLikeView
-            ? "No matches yet. Add sectors in Settings or publish a project to see mentors in your space."
+            ? "No matches yet. Add sectors in Settings or publish a project to see investors in your space."
             : "No creative matches yet. Add your expertise in Settings to improve recommendations."}
         </p>
       ) : (
@@ -619,7 +619,7 @@ export function DashboardWelcome() {
                   className="text-xs sm:text-sm font-medium hover:underline shrink-0"
                   style={{ color: THEME.primary }}
                 >
-                  Request Mentorship
+                  Connect with Investor
                 </button>
               )}
             </li>
@@ -673,7 +673,7 @@ export function DashboardWelcome() {
             <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            {isInvestorView ? "Community" : "Find Mentors"}
+            {isInvestorView ? "Community" : "Find investors"}
           </Link>
         </div>
       </div>
@@ -752,7 +752,7 @@ export function DashboardWelcome() {
         ))}
       </div>
 
-      {/* Main grid: Projects + Requests | Mentors */}
+      {/* Main grid: Projects + Requests | Investors */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 min-w-0">
         {/* Left: My Projects + Recent Requests */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-w-0">
@@ -936,7 +936,7 @@ export function DashboardWelcome() {
 
         </div>
 
-        {/* Right: Recommended Mentors */}
+        {/* Right: Recommended investors */}
         <div className="hidden lg:block space-y-4 sm:space-y-6 min-w-0">{mentorsSection}</div>
       </div>
       {isFounderLikeView && selectedMentor && (
@@ -944,7 +944,7 @@ export function DashboardWelcome() {
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Request Mentorship</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Connect with Investor</h3>
                 <p className="mt-1 text-sm text-gray-500">Send a short note to {selectedMentor.name}.</p>
               </div>
               <button

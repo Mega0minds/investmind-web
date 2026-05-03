@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeRole } from "@/lib/roles";
 
-/** Mentors (investors) do not have the creative project upload area. */
+/** Investors do not have the creative project upload area. */
 export async function redirectInvestorFromListingsArea(
   supabase: SupabaseClient,
   userId: string

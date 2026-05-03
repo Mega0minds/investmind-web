@@ -11,17 +11,17 @@ const FAQ_ITEMS: FAQItem[] = [
   {
     question: "What is InvestMind?",
     answer:
-      "InvestMind connects youth innovators across Africa with investors, mentors, and a supportive community so great ideas get the funding, guidance, and exposure they need to grow.",
+      "InvestMind connects youth innovators across Africa with investors and a supportive community so great ideas get the funding, guidance, and exposure they need to grow.",
   },
   {
     question: "Who can join?",
     answer:
-      "Innovators with an idea or early-stage venture, and investors or mentors who want to support talent in Africa can sign up and get started.",
+      "Innovators with an idea or early-stage venture, and investors who want to support talent in Africa can sign up and get started.",
   },
   {
     question: "How do I get started?",
     answer:
-      "Click Get Started, create your account, and complete your profile. You can then explore opportunities, apply for funding, or connect with mentors.",
+      "Click Get Started, create your account, and complete your profile. You can then explore opportunities, apply for funding, or connect with investors.",
   },
 ];
 

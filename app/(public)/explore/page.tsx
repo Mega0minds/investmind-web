@@ -1,6 +1,7 @@
 import { Header } from "@/components/nav/Header";
 import { Footer } from "@/components/nav/Footer";
 import { ExploreIdeasContent } from "@/components/explore/ExploreIdeasContent";
+import { buildPageMetadata } from "@/lib/seo-metadata";
 import { createClient } from "@/lib/supabase/server";
 import {
   fetchExploreProjects,
@@ -9,6 +10,13 @@ import {
 } from "@/lib/explore-projects";
 
 export const revalidate = 60;
+
+export const metadata = buildPageMetadata({
+  title: "Explore Ideas",
+  description:
+    "Browse published ideas and projects from young innovators across Africa—sectors, stages, and teams you can discover, support, or learn from on InvestMind.",
+  path: "/explore",
+});
 
 export default async function PublicExplorePage() {
   const supabase = await createClient();
