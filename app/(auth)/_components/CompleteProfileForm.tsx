@@ -14,6 +14,7 @@ import {
   getAfricanCountries,
   getStatesForCountry,
 } from "@/lib/africa-locations";
+import { isMemberProfileOnboardingComplete } from "@/lib/auth/member-profile";
 import { createClient } from "@/lib/supabase/client";
 import { safeGetSession, safeGetUser } from "@/lib/supabase/safe-auth";
 
@@ -107,7 +108,7 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
         .select("first_name, last_name, role, age")
         .eq("id", session.user.id)
         .maybeSingle();
-      const hasProfile = profile?.first_name && profile?.last_name && profile?.role && profile?.age != null;
+      const hasProfile = isMemberProfileOnboardingComplete(profile);
       setChecking(false);
       if (hasProfile) {
         router.replace("/dashboard");

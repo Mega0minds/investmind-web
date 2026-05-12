@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AuthLayout } from "../_components/AuthLayout";
 import { AuthHero } from "../_components/AuthHero";
 import { SignupForm } from "../_components/SignupForm";
@@ -16,7 +17,13 @@ export const metadata = buildPageMetadata({
 export default function SignupPage() {
   return (
     <AuthLayout hero={<AuthHero image="/assets/signup.png" />}>
-      <SignupForm />
+      <Suspense
+        fallback={
+          <div className="mx-auto w-full max-w-[380px] py-10 text-center text-sm text-[#6B7280]">Loading…</div>
+        }
+      >
+        <SignupForm />
+      </Suspense>
     </AuthLayout>
   );
 }

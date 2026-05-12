@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
@@ -13,6 +13,7 @@ import {
   validateNewPassword,
 } from "@/lib/password-policy";
 import { createClient } from "@/lib/supabase/client";
+import { GoogleOAuthButton } from "./GoogleOAuthButton";
 
 const DUPLICATE_EMAIL_MESSAGE =
   "An account with this email already exists. Sign in instead.";
@@ -28,9 +29,23 @@ function signUpErrorLooksLikeDuplicate(message: string) {
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (!err) return;
+    if (err === "oauth" || err === "oauth_config") {
+      setError(
+        err === "oauth_config"
+          ? "Google sign-in isn’t configured on this server yet. Add NEXT_PUBLIC_SITE_URL to your environment."
+          : "Google sign-in didn’t finish. Try again, or sign up with email."
+      );
+    }
+    router.replace("/signup", { scroll: false });
+  }, [searchParams, router]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,8 +64,7 @@ export function SignupForm() {
       setError("Passwords do not match.");
       return;
     }
-    const termsChecked = (form.elements.namedItem("terms") as HTMLInputElement)?.checked;
-    if (!termsChecked) {
+    if (!agreeTerms) {
       setError("You must agree to the Terms and Conditions to sign up.");
       return;
     }
@@ -123,8 +137,43 @@ export function SignupForm() {
         Create your account
       </h1>
       <p className="text-sm text-[#6B7280] mb-4 sm:mb-5">
-        Enter your email and password. You&apos;ll add your details next.
+        Continue with Google, or enter your email and password. You&apos;ll add your details next.
       </p>
+
+      <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-5">
+        <GoogleOAuthButton
+          nextPath="/dashboard"
+          disabled={loading || !agreeTerms}
+          label="Sign up with Google"
+          onError={(message) => setError(message)}
+        />
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={agreeTerms}
+            onChange={(e) => setAgreeTerms(e.target.checked)}
+            className="rounded border-gray-300 w-4 h-4 mt-0.5 shrink-0"
+            style={{ accentColor: THEME.primary }}
+            id="signup-terms"
+            aria-describedby={agreeTerms ? undefined : "signup-terms-hint"}
+          />
+          <span className="text-sm text-[#4A4A4A]">
+            I agree to the{" "}
+            <Link href="/terms" className="font-medium text-[#5A2D8F] hover:underline" target="_blank" rel="noopener noreferrer">
+              Terms and Conditions
+            </Link>
+          </span>
+        </label>
+        {!agreeTerms && (
+          <p id="signup-terms-hint" className="text-xs text-center text-[#9CA3AF] -mt-1">
+            Check this to enable Google sign-up and <span className="whitespace-nowrap">email Next</span>.
+          </p>
+        )}
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 top-1/2 border-t border-gray-200" aria-hidden />
+          <span className="relative bg-white px-3 text-xs font-medium text-[#9CA3AF]">or</span>
+        </div>
+      </div>
 
       <form
         className="space-y-3 sm:space-y-4"
@@ -169,22 +218,6 @@ export function SignupForm() {
           maxLength={PASSWORD_MAX_LENGTH}
         />
         <p className="text-xs text-[#9CA3AF] -mt-2">{PASSWORD_REQUIREMENTS_HINT}</p>
-        <label className="flex items-start gap-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            name="terms"
-            checked={agreeTerms}
-            onChange={(e) => setAgreeTerms(e.target.checked)}
-            className="rounded border-gray-300 w-4 h-4 mt-0.5 shrink-0"
-            style={{ accentColor: THEME.primary }}
-          />
-          <span className="text-sm text-[#4A4A4A]">
-            I agree to the{" "}
-            <Link href="/terms" className="font-medium text-[#5A2D8F] hover:underline" target="_blank" rel="noopener noreferrer">
-              Terms and Conditions
-            </Link>
-          </span>
-        </label>
         <button
           type="submit"
           disabled={loading || !agreeTerms}

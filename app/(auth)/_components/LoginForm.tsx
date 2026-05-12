@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { THEME } from "@/lib/constants";
+import { isMemberProfileOnboardingComplete } from "@/lib/auth/member-profile";
 import { createClient } from "@/lib/supabase/client";
+import { GoogleOAuthButton } from "./GoogleOAuthButton";
 
 type LoginFormProps = {
   adminOnly?: boolean;
@@ -96,6 +98,22 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
     setDismissedEmailSentModal(true);
     router.replace(adminOnly ? "/admin/login" : "/login", { scroll: false });
   }
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (!err) return;
+    if (err === "oauth" || err === "oauth_config") {
+      setAuthAlert({
+        body:
+          err === "oauth_config"
+            ? "Google sign-in isn’t configured on this server yet. Add NEXT_PUBLIC_SITE_URL to your environment."
+            : "Google sign-in didn’t finish. Try again, or sign in with email and password.",
+        variant: err === "oauth_config" ? "warning" : "error",
+      });
+    }
+    const path = adminOnly ? "/admin/login" : "/login";
+    router.replace(path, { scroll: false });
+  }, [searchParams, router, adminOnly]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -202,8 +220,7 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
       : { data: null };
     const nextRaw = searchParams.get("next");
     const nextPath = nextRaw && nextRaw.startsWith("/") ? nextRaw : null;
-    const hasProfile =
-      profile?.first_name && profile?.last_name && profile?.role && profile?.age != null;
+    const hasProfile = isMemberProfileOnboardingComplete(profile);
     if (adminOnly) {
       if (profile?.role !== "admin") {
         await supabase.auth.signOut();
@@ -289,9 +306,21 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
       </h1>
       <p className="text-sm text-[#6B7280] mb-4 sm:mb-5">
         {adminOnly
-          ? "Company administrators only. Sign in with your admin credentials."
-          : "Sign in with your email and password."}
+          ? "Company administrators only. Use Google or your admin email and password."
+          : "Use Google or sign in with your email and password."}
       </p>
+      <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-5">
+        <GoogleOAuthButton
+          nextPath={adminOnly ? "/admin" : "/dashboard"}
+          disabled={loading}
+          label="Continue with Google"
+          onError={(message) => setAuthAlert({ body: message, variant: "error" })}
+        />
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 top-1/2 border-t border-gray-200" aria-hidden />
+          <span className="relative bg-white px-3 text-xs font-medium text-[#9CA3AF]">or</span>
+        </div>
+      </div>
       <form
         className="space-y-3 sm:space-y-4"
         onSubmit={handleSubmit}
