@@ -182,11 +182,6 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
     onStepChangeAction(2);
   }
 
-  function handleSkipFromProfile() {
-    setError(null);
-    onStepChangeAction(2);
-  }
-
   function handleBackToProfile() {
     setError(null);
     onStepChangeAction(1);
@@ -275,7 +270,8 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
           Almost there
         </h1>
         <p className="text-sm text-[#6B7280] mb-4 sm:mb-5 shrink-0">
-          Tell us a bit about yourself.
+          Tell us a bit about yourself. On the location step you can use{" "}
+          <span className="font-medium text-[#4A4A4A]">Back</span> to change these answers.
         </p>
 
         <div className="flex flex-col gap-4 sm:gap-5">
@@ -373,13 +369,10 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
             </select>
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
-            <button type="button" className={secondaryBtnClass} onClick={handleSkipFromProfile}>
-              Skip
-            </button>
+          <div className="flex justify-end pt-2">
             <button
               type="button"
-              className={primaryBtnClass}
+              className={`${primaryBtnClass} w-full sm:w-auto`}
               style={{ backgroundColor: THEME.primary }}
               onClick={handleNextFromProfile}
             >
@@ -404,7 +397,9 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
         Where are you based?
       </h1>
       <p className="text-sm text-[#6B7280] mb-4 sm:mb-5 shrink-0">
-        Choose your country and state, or skip and finish.
+        Choose your country and state, or finish without adding a location. Use{" "}
+        <span className="font-medium text-[#4A4A4A]">Back</span> anytime to edit your name, role,
+        or age.
       </p>
 
       <form
@@ -462,7 +457,7 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
           <button type="button" className={secondaryBtnClass} onClick={handleBackToProfile}>
-            Skip
+            Back
           </button>
           <button
             type="submit"
@@ -470,7 +465,7 @@ export function CompleteProfileForm({ step, onStepChangeAction }: CompleteProfil
             className={primaryBtnClass}
             style={{ backgroundColor: THEME.primary }}
           >
-            {loading ? "Saving…" : "Next"}
+            {loading ? "Saving…" : "Finish"}
           </button>
         </div>
 
