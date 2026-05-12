@@ -1,4 +1,24 @@
 /**
+ * Site origin for member auth flows (OAuth callback, email confirmation).
+ * Browser: current tab origin. Server / no window: NEXT_PUBLIC_SITE_URL when valid.
+ */
+export function getMemberAuthSiteOrigin(): string {
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
+  const fromWindow =
+    typeof window !== "undefined" && typeof window.location?.origin === "string"
+      ? window.location.origin
+      : "";
+  return fromWindow || (site && /^https?:\/\//i.test(site) ? site : "");
+}
+
+/** Absolute URL Supabase uses after the user confirms their signup email (must be in Redirect URLs). */
+export function buildEmailSignupConfirmationRedirectUrl(): string | undefined {
+  const origin = getMemberAuthSiteOrigin();
+  if (!origin) return undefined;
+  return `${origin}/signup/complete`;
+}
+
+/**
  * Build the absolute URL Supabase redirects to after Google (or other OAuth) sign-in.
  * Must be listed under Supabase Dashboard → Authentication → URL Configuration → Redirect URLs.
  *
@@ -8,14 +28,7 @@
  */
 export function buildOAuthCallbackUrl(nextPath: string): string {
   const next = sanitizeInternalNextPath(nextPath);
-  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
-  const fromWindow =
-    typeof window !== "undefined" && typeof window.location?.origin === "string"
-      ? window.location.origin
-      : "";
-  const origin =
-    fromWindow ||
-    (site && /^https?:\/\//i.test(site) ? site : "");
+  const origin = getMemberAuthSiteOrigin();
   if (!origin) return `/auth/callback?next=${encodeURIComponent(next)}`;
   return `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
 }

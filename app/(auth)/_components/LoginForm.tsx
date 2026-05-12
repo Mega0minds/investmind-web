@@ -282,7 +282,10 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
                 Check your email
               </h2>
               <p className="text-sm text-[#6B7280] text-center mb-6">
-                A confirmation email has been sent. Please check your inbox and click the link to verify your account, then sign in below.
+                We&apos;ve sent a confirmation email. Open it and tap the link to verify your account
+                — you&apos;ll go straight to <span className="font-medium text-[#4A4A4A]">finish your profile</span>
+                . Use <span className="font-medium text-[#4A4A4A]">Sign in</span> below if you&apos;ve already
+                verified.
               </p>
               <button
                 type="button"
@@ -314,7 +317,7 @@ export function LoginForm({ adminOnly = false }: LoginFormProps) {
           nextPath={adminOnly ? "/admin" : "/dashboard"}
           disabled={loading}
           label="Continue with Google"
-          onError={(message) => setAuthAlert({ body: message, variant: "error" })}
+          onErrorAction={(message) => setAuthAlert({ body: message, variant: "error" })}
         />
         <div className="relative flex items-center justify-center">
           <div className="absolute inset-0 top-1/2 border-t border-gray-200" aria-hidden />

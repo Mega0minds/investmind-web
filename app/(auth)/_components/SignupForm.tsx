@@ -13,6 +13,7 @@ import {
   validateNewPassword,
 } from "@/lib/password-policy";
 import { createClient } from "@/lib/supabase/client";
+import { buildEmailSignupConfirmationRedirectUrl } from "@/lib/auth/oauth-callback";
 import { GoogleOAuthButton } from "./GoogleOAuthButton";
 
 const DUPLICATE_EMAIL_MESSAGE =
@@ -92,17 +93,11 @@ export function SignupForm() {
       }
 
       const supabase = createClient();
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
-      const postConfirmUrl =
-        siteUrl && /^https?:\/\//i.test(siteUrl)
-          ? `${siteUrl}/login`
-          : typeof window !== "undefined"
-            ? `${window.location.origin}/login`
-            : undefined;
+      const postConfirmUrl = buildEmailSignupConfirmationRedirectUrl();
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: postConfirmUrl },
+        options: postConfirmUrl ? { emailRedirectTo: postConfirmUrl } : undefined,
       });
 
       if (signUpError) {
@@ -145,7 +140,7 @@ export function SignupForm() {
           nextPath="/dashboard"
           disabled={loading || !agreeTerms}
           label="Sign up with Google"
-          onError={(message) => setError(message)}
+          onErrorAction={(message) => setError(message)}
         />
         <label className="flex items-start gap-3 cursor-pointer select-none">
           <input

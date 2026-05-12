@@ -9,14 +9,15 @@ type GoogleOAuthButtonProps = {
   nextPath: string;
   disabled?: boolean;
   label?: string;
-  onError?: (message: string) => void;
+  /** Client callback; `Action` suffix satisfies Next.js client-entry prop checks (not a Server Action). */
+  onErrorAction?: (message: string) => void;
 };
 
 export function GoogleOAuthButton({
   nextPath,
   disabled,
   label = "Continue with Google",
-  onError,
+  onErrorAction,
 }: GoogleOAuthButtonProps) {
   const [busy, setBusy] = useState(false);
 
@@ -28,7 +29,7 @@ export function GoogleOAuthButton({
     try {
       const redirectTo = buildOAuthCallbackUrl(nextPath);
       if (!/^https?:\/\//i.test(redirectTo)) {
-        onError?.("Set NEXT_PUBLIC_SITE_URL in .env.local to your app URL (e.g. http://localhost:3000) so Google sign-in can redirect back.");
+        onErrorAction?.("Set NEXT_PUBLIC_SITE_URL in .env.local to your app URL (e.g. http://localhost:3000) so Google sign-in can redirect back.");
         return;
       }
       const supabase = createClient(true);
@@ -37,6 +38,10 @@ export function GoogleOAuthButton({
         options: {
           redirectTo,
           queryParams: { prompt: "select_account" },
+          // We navigate ourselves on the next task (below). Reasons:
+          // - Edge often misses navigation when GoTrue calls assign() inline after await.
+          // - One navigation avoids Chrome "Throttling navigation" from double assign.
+          skipBrowserRedirect: true,
         },
       });
       const raced = await Promise.race([
@@ -46,25 +51,27 @@ export function GoogleOAuthButton({
         ),
       ]);
       if (!raced.ok) {
-        onError?.(
+        onErrorAction?.(
           "Google sign-in is taking too long. Check your connection and try again, or use email sign-in."
         );
         return;
       }
       const { data, error } = raced.r;
       if (error) {
-        onError?.(error.message || "Could not start Google sign-in.");
+        onErrorAction?.(error.message || "Could not start Google sign-in.");
         return;
       }
-      if (data.url) {
-        // GoTrueClient already navigates here; assigning again can trigger Chrome
-        // "Throttling navigation" and leave the UI stuck on "Redirecting…".
+      const url = data.url;
+      if (url) {
         scheduledNavigation = true;
+        window.setTimeout(() => {
+          window.location.assign(url);
+        }, 0);
         return;
       }
-      onError?.("Could not start Google sign-in.");
+      onErrorAction?.("Could not start Google sign-in.");
     } catch (e) {
-      onError?.(e instanceof Error ? e.message : "Could not start Google sign-in.");
+      onErrorAction?.(e instanceof Error ? e.message : "Could not start Google sign-in.");
     } finally {
       if (!scheduledNavigation) {
         setBusy(false);
