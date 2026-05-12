@@ -1,0 +1,73 @@
+<!--
+  Supabase → Authentication → Email Templates → "Confirm signup"
+  Paste everything INSIDE the outer wrapper (the two <div>s) as the email BODY, or the full HTML if your editor allows.
+
+  Required variable: {{ .ConfirmationURL }} (Supabase / GoTrue)
+-->
+<div style="background: #f7f2ff; padding: 40px; font-family: Arial, sans-serif">
+  <div
+    style="
+      max-width: 520px;
+      margin: auto;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 35px;
+      box-shadow: 0 10px 25px rgba(140, 82, 255, 0.12);
+    "
+  >
+    <div style="text-align: center; margin-bottom: 25px">
+      <h1 style="margin: 0; font-size: 32px; color: #8c52ff">InvestMind</h1>
+      <p style="color: #9b8bbd; margin-top: 8px; font-size: 14px">Smart Investing Starts Here</p>
+    </div>
+
+    <h2 style="color: #2d1b4e; margin-bottom: 15px">Confirm Your Email</h2>
+
+    <p style="color: #5f5675; font-size: 15px; line-height: 1.7">
+      Welcome to InvestMind. You're just one step away from activating your account and exploring a
+      smarter investment experience.
+    </p>
+
+    <div
+      style="
+        background: linear-gradient(135deg, #f3e8ff, #ede0ff);
+        border-left: 4px solid #8c52ff;
+        padding: 16px;
+        border-radius: 10px;
+        margin: 25px 0;
+      "
+    >
+      <p style="margin: 0; color: #5b4b7a; font-size: 14px; line-height: 1.5">
+        For your security, please verify your email address before continuing.
+      </p>
+    </div>
+
+    <div style="text-align: center; margin: 35px 0">
+      <a
+        href="{{ .ConfirmationURL }}"
+        style="
+          background: linear-gradient(135deg, #8c52ff, #b57cff);
+          color: #ffffff;
+          text-decoration: none;
+          padding: 14px 28px;
+          border-radius: 10px;
+          font-weight: bold;
+          font-size: 15px;
+          display: inline-block;
+          box-shadow: 0 6px 18px rgba(140, 82, 255, 0.25);
+        "
+      >
+        Confirm Email Address
+      </a>
+    </div>
+
+    <p style="color: #8d84a3; font-size: 13px; line-height: 1.6">
+      If you did not create an InvestMind account, you can safely ignore this email.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #eee5ff; margin: 30px 0" />
+
+    <p style="text-align: center; color: #a396c7; font-size: 12px">
+      © 2026 InvestMind. All rights reserved.
+    </p>
+  </div>
+</div>

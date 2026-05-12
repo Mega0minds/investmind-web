@@ -11,6 +11,18 @@ import { THEME } from "@/lib/constants";
 /** Text on dark nav chrome (`THEME.founderNavBg`) */
 const NAV_ON_DARK = "#F8F6FC";
 
+/** Auth / onboarding surfaces: never show "Dashboard" in the header (session may already exist). */
+function isPublicAuthFlowPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (pathname === "/login") return true;
+  if (pathname.startsWith("/signup")) return true;
+  if (pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/verify-email") {
+    return true;
+  }
+  if (pathname === "/admin/login" || pathname === "/admin/signup") return true;
+  return false;
+}
+
 export function Header() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -18,6 +30,7 @@ export function Header() {
   const isAboutPage = pathname === "/about";
   const primaryNavHref = isAboutPage ? "/" : "/about";
   const primaryNavLabel = isAboutPage ? "Home" : "About Us";
+  const showDashboardCta = Boolean(isLoggedIn) && !isPublicAuthFlowPath(pathname);
 
   useEffect(() => {
     const supabase = createClient();
@@ -68,8 +81,8 @@ export function Header() {
           </Link>
         </nav>
 
-        {/* Desktop: Dashboard when logged in, Login + Get Started when not */}
-        {isLoggedIn ? (
+        {/* Desktop: Dashboard when logged in (except on auth flows), else Login + Get Started */}
+        {showDashboardCta ? (
           <Link
             href="/dashboard"
             className="hidden md:inline-flex rounded-lg px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 shrink-0"
@@ -147,7 +160,7 @@ export function Header() {
             >
               FAQ
             </Link>
-            {isLoggedIn ? (
+            {showDashboardCta ? (
               <Link
                 href="/dashboard"
                 onClick={() => setMenuOpen(false)}
